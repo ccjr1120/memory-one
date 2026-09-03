@@ -20,6 +20,8 @@
   "dependencies": {
     "@fastify/static": "^8.3.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@radix-ui/react-select": "^2.3.7",
+    "@tanstack/react-router": "^1.170.32",
     "better-sqlite3": "^12.4.1",
     "fastify": "^5.6.0",
     "lucide-react": "^0.468.0",

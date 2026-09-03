@@ -22,6 +22,12 @@ The current frontend release uses Chinese UI copy. User-authored memory content 
 
 `scope` is an optional classification field, not a required isolation boundary. A stable project directory or repository name (for this repository, `memory-one`) is one recommended scope value for project-specific preferences and knowledge, alongside values such as `work` or `personal`. MCP calls may omit `scope` for general-purpose searches or pass it as a category filter; do not require every memory or Agent call to include a scope.
 
+## Memory Retrieval Intent
+
+Memory One primarily exists so agents retrieve and apply relevant prior experience before starting any task. Design MCP instructions and tool descriptions around universal pre-task context retrieval, not around enumerating specific memory-related user questions as trigger phrases.
+
+Codex global guidance must only be installed through an explicit user action in the frontend. That action may replace the instruction block managed by Memory One, but it must preserve all unrelated content in the user's global `AGENTS.md`.
+
 ## Durable Corrections
 
 When the user corrects agent behavior or states a durable repository-specific working preference, update this `AGENTS.md` in the same change so future work follows that correction.
