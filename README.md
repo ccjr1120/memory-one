@@ -43,6 +43,8 @@ Open <http://127.0.0.1:8765/> for the memory viewer. Configure an MCP client wit
 
 The database is stored at `data/memory.db` by default. Set `MEMORY_DB_PATH` to use another path and `MEMORY_PORT` to change the port.
 
+MCP tool calls are recorded locally with the tool name, success status, duration, and call time. Aggregated totals and per-tool usage are shown on the MCP page and available from `GET /api/mcp/stats`. Call arguments and memory content are not included in the usage log.
+
 Memory supports an optional `scope` classification. Prefer a stable project directory or repository name as the `scope` value for project-specific preferences and knowledge, but omit it for general-purpose memories. MCP calls without `scope` search all memories; when `scope` is provided, it acts as a category filter.
 
 The first search implementation uses SQLite FTS5, with a substring fallback for Chinese text. The schema already reserves an embedding column for a later sqlite-vec integration.

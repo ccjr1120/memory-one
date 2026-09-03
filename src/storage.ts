@@ -31,6 +31,22 @@ export type Memory = Omit<MemoryInput, "metadata"> & {
   score?: number;
 };
 
+export type McpToolStats = {
+  total_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  average_duration_ms: number;
+  last_called_at: string | null;
+  tools: Array<{
+    tool_name: string;
+    calls: number;
+    successful_calls: number;
+    failed_calls: number;
+    average_duration_ms: number;
+    last_called_at: string;
+  }>;
+};
+
 const now = () => new Date().toISOString();
 
 export class MemoryStore {
@@ -62,6 +78,15 @@ export class MemoryStore {
       CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, project);
       CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(session_id);
       CREATE INDEX IF NOT EXISTS idx_memories_occurred ON memories(occurred_at);
+      CREATE TABLE IF NOT EXISTS mcp_tool_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tool_name TEXT NOT NULL,
+        success INTEGER NOT NULL,
+        duration_ms REAL NOT NULL,
+        called_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_tool_calls_tool ON mcp_tool_calls(tool_name);
+      CREATE INDEX IF NOT EXISTS idx_mcp_tool_calls_called_at ON mcp_tool_calls(called_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content, kind, scope, project, source, content='memories', content_rowid='rowid'
       );
@@ -149,5 +174,31 @@ export class MemoryStore {
   delete(id: string): boolean {
     const result = this.db.prepare("UPDATE memories SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL").run(now(), now(), id);
     return result.changes > 0;
+  }
+
+  recordToolCall(toolName: string, success: boolean, durationMs: number): void {
+    this.db.prepare("INSERT INTO mcp_tool_calls (tool_name, success, duration_ms, called_at) VALUES (?, ?, ?, ?)")
+      .run(toolName, success ? 1 : 0, durationMs, now());
+  }
+
+  getToolStats(): McpToolStats {
+    const totals = this.db.prepare(`SELECT
+      count(*) AS total_calls,
+      coalesce(sum(success), 0) AS successful_calls,
+      count(*) - coalesce(sum(success), 0) AS failed_calls,
+      coalesce(round(avg(duration_ms), 2), 0) AS average_duration_ms,
+      max(called_at) AS last_called_at
+      FROM mcp_tool_calls`).get() as Omit<McpToolStats, "tools">;
+    const tools = this.db.prepare(`SELECT
+      tool_name,
+      count(*) AS calls,
+      coalesce(sum(success), 0) AS successful_calls,
+      count(*) - coalesce(sum(success), 0) AS failed_calls,
+      coalesce(round(avg(duration_ms), 2), 0) AS average_duration_ms,
+      max(called_at) AS last_called_at
+      FROM mcp_tool_calls
+      GROUP BY tool_name
+      ORDER BY calls DESC, tool_name ASC`).all() as McpToolStats["tools"];
+    return { ...totals, tools };
   }
 }
