@@ -11,6 +11,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "vite",
     "dev:server": "tsx src/server.ts",
+    "screenshots": "node scripts/capture-screens.mjs",
     "install:local": "bash scripts/install-local.sh",
     "build:web": "vite build",
     "build:server": "tsc -p tsconfig.json",
@@ -27,6 +28,7 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "streamdown": "^2.6.0",
     "zod": "^4.5.4"
   },
   "devDependencies": {

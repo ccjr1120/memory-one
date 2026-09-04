@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 export type MemoryInput = {
   id?: string;
@@ -28,6 +28,8 @@ export type Memory = Omit<MemoryInput, "metadata"> & {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  recall_count: number;
+  last_recalled_at: string | null;
   score?: number;
 };
 
@@ -45,6 +47,28 @@ export type McpToolStats = {
     average_duration_ms: number;
     last_called_at: string;
   }>;
+};
+
+export type McpKey = {
+  id: string;
+  name: string;
+  prefix: string;
+  allowed_tools: string[];
+  is_default: boolean;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
+export type AgentConfig = {
+  name: string;
+  scope: string;
+  provider: string;
+  model: string;
+  base_url: string;
+  api_key: string;
+  auto_context: boolean;
+  updated_at: string | null;
 };
 
 const now = () => new Date().toISOString();
@@ -73,7 +97,9 @@ export class MemoryStore {
         embedding BLOB,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
-        deleted_at TEXT
+        deleted_at TEXT,
+        recall_count INTEGER NOT NULL DEFAULT 0,
+        last_recalled_at TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, project);
       CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(session_id);
@@ -87,6 +113,29 @@ export class MemoryStore {
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_tool_calls_tool ON mcp_tool_calls(tool_name);
       CREATE INDEX IF NOT EXISTS idx_mcp_tool_calls_called_at ON mcp_tool_calls(called_at);
+      CREATE TABLE IF NOT EXISTS mcp_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL UNIQUE,
+        allowed_tools_json TEXT NOT NULL DEFAULT '[]',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT,
+        revoked_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS agent_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        name TEXT NOT NULL DEFAULT '记忆管家',
+        scope TEXT NOT NULL DEFAULT '',
+        provider TEXT NOT NULL DEFAULT '',
+        model TEXT NOT NULL DEFAULT '',
+        base_url TEXT NOT NULL DEFAULT '',
+        api_key TEXT NOT NULL DEFAULT '',
+        auto_context INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_mcp_keys_active ON mcp_keys(revoked_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content, kind, scope, project, source, content='memories', content_rowid='rowid'
       );
@@ -105,6 +154,11 @@ export class MemoryStore {
         VALUES (new.rowid, new.content, new.kind, new.scope, new.project, new.source);
       END;
     `);
+    const columns = this.db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+    if (!columns.some((column) => column.name === "recall_count")) this.db.exec("ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0");
+    if (!columns.some((column) => column.name === "last_recalled_at")) this.db.exec("ALTER TABLE memories ADD COLUMN last_recalled_at TEXT");
+    const keyColumns = this.db.prepare("PRAGMA table_info(mcp_keys)").all() as Array<{ name: string }>;
+    if (!keyColumns.some((column) => column.name === "is_default")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
     this.rebuildFtsIfNeeded();
   }
 
@@ -148,14 +202,37 @@ export class MemoryStore {
 
   search(query: string, scope = "user", project: string | null = null, limit = 20): Memory[] {
     const max = Math.min(Math.max(limit, 1), 100);
-    let rows = project
-      ? this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.project = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, project, max)
-      : this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, max);
+    let rows: unknown[] = [];
+    try {
+      rows = (project
+        ? this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.project = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, project, max)
+        : this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, max)) as unknown[];
+    } catch {
+      // FTS5 treats punctuation as query syntax; use the substring path for invalid expressions.
+      rows = [];
+    }
     if (!rows.length) {
       rows = project
         ? this.db.prepare("SELECT * FROM memories WHERE content LIKE ? AND scope = ? AND project = ? AND deleted_at IS NULL ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?").all(`%${query}%`, scope, project, max)
         : this.db.prepare("SELECT * FROM memories WHERE content LIKE ? AND scope = ? AND deleted_at IS NULL ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?").all(`%${query}%`, scope, max);
     }
+    return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
+  }
+
+  recordRecalls(memories: Memory[]): Memory[] {
+    if (!memories.length) return memories;
+    const timestamp = now();
+    const update = this.db.prepare("UPDATE memories SET recall_count = recall_count + 1, last_recalled_at = ? WHERE id = ? AND deleted_at IS NULL");
+    const ids = [...new Set(memories.map((memory) => memory.id))];
+    this.db.transaction(() => { for (const id of ids) update.run(timestamp, id); })();
+    return memories.map((memory) => ({ ...memory, recall_count: (memory.recall_count ?? 0) + 1, last_recalled_at: timestamp }));
+  }
+
+  mostRecalled(scope = "user", project: string | null = null, limit = 5): Memory[] {
+    const max = Math.min(Math.max(limit, 1), 50);
+    const rows = project
+      ? this.db.prepare("SELECT * FROM memories WHERE scope = ? AND project = ? AND deleted_at IS NULL ORDER BY recall_count DESC, last_recalled_at DESC, created_at DESC LIMIT ?").all(scope, project, max)
+      : this.db.prepare("SELECT * FROM memories WHERE scope = ? AND deleted_at IS NULL ORDER BY recall_count DESC, last_recalled_at DESC, created_at DESC LIMIT ?").all(scope, max);
     return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
   }
 
@@ -200,5 +277,79 @@ export class MemoryStore {
       GROUP BY tool_name
       ORDER BY calls DESC, tool_name ASC`).all() as McpToolStats["tools"];
     return { ...totals, tools };
+  }
+
+  createMcpKey(name: string, allowedTools: string[], isDefault = false) {
+    const id = randomUUID();
+    const secret = `mo_${randomBytes(24).toString("base64url")}`;
+    const timestamp = now();
+    this.db.prepare("INSERT INTO mcp_keys (id, name, prefix, key_hash, allowed_tools_json, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .run(id, name, secret.slice(0, 11), createHash("sha256").update(secret).digest("hex"), JSON.stringify(allowedTools), isDefault ? 1 : 0, timestamp);
+    return { key: secret, keyRecord: this.getMcpKey(id)! };
+  }
+
+  getMcpKey(id: string): McpKey | null {
+    const row = this.db.prepare("SELECT id, name, prefix, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    const { allowed_tools_json, is_default, ...rest } = row;
+    return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey;
+  }
+
+  listMcpKeys(): McpKey[] {
+    return (this.db.prepare("SELECT id, name, prefix, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys ORDER BY created_at DESC").all() as Record<string, unknown>[]).map((row) => { const { allowed_tools_json, is_default, ...rest } = row; return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey; });
+  }
+
+  updateMcpKey(id: string, patch: { name?: string; allowed_tools?: string[] }): McpKey | null {
+    const values: Record<string, unknown> = {};
+    if (patch.name !== undefined) values.name = patch.name;
+    if (patch.allowed_tools !== undefined) values.allowed_tools_json = JSON.stringify(patch.allowed_tools);
+    if (!Object.keys(values).length) return this.getMcpKey(id);
+    this.db.prepare(`UPDATE mcp_keys SET ${Object.keys(values).map((key) => `${key} = @${key}`).join(", ")} WHERE id = @id AND revoked_at IS NULL`).run({ ...values, id });
+    return this.getMcpKey(id);
+  }
+
+  revokeMcpKey(id: string): boolean {
+    return this.db.prepare("UPDATE mcp_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(now(), id).changes > 0;
+  }
+
+  verifyMcpKey(secret: string): McpKey | null {
+    const hash = createHash("sha256").update(secret).digest("hex");
+    const row = this.db.prepare("SELECT id, name, prefix, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys WHERE key_hash = ? AND revoked_at IS NULL").get(hash) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    this.db.prepare("UPDATE mcp_keys SET last_used_at = ? WHERE id = ?").run(now(), row.id);
+    const { allowed_tools_json, is_default, ...rest } = row;
+    return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey;
+  }
+
+  ensureDefaultMcpKey() {
+    const existing = this.db.prepare("SELECT id FROM mcp_keys WHERE is_default = 1 AND revoked_at IS NULL LIMIT 1").get() as { id: string } | undefined;
+    if (existing) return this.getMcpKey(existing.id)!;
+    return this.createMcpKey("默认 Key", [], true).keyRecord;
+  }
+
+  getAgentConfig(): AgentConfig {
+    const row = this.db.prepare("SELECT name, scope, provider, model, base_url, api_key, auto_context, updated_at FROM agent_config WHERE id = 1").get() as Record<string, unknown> | undefined;
+    if (!row) return { name: "记忆管家", scope: "", provider: "", model: "", base_url: "", api_key: "", auto_context: true, updated_at: null };
+    return { ...row, auto_context: Boolean(row.auto_context) } as AgentConfig;
+  }
+
+  saveAgentConfig(input: Partial<Omit<AgentConfig, "updated_at">>): AgentConfig {
+    const current = this.getAgentConfig();
+    const next = {
+      name: input.name?.trim() || current.name,
+      scope: input.scope?.trim() ?? current.scope,
+      provider: input.provider?.trim() || current.provider,
+      model: input.model?.trim() ?? current.model,
+      base_url: input.base_url?.trim() ?? current.base_url,
+      api_key: input.api_key?.trim() ?? current.api_key,
+      auto_context: input.auto_context ?? current.auto_context,
+      updated_at: now(),
+    };
+    this.db.prepare(`INSERT INTO agent_config (id, name, scope, provider, model, base_url, api_key, auto_context, updated_at)
+      VALUES (1, @name, @scope, @provider, @model, @base_url, @api_key, @auto_context, @updated_at)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, scope = excluded.scope, provider = excluded.provider,
+        model = excluded.model, base_url = excluded.base_url, api_key = excluded.api_key,
+        auto_context = excluded.auto_context, updated_at = excluded.updated_at`).run({ ...next, auto_context: next.auto_context ? 1 : 0 });
+    return this.getAgentConfig();
   }
 }

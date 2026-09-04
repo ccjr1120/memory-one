@@ -12,12 +12,15 @@ type SelectProps = {
   options: SelectOption[];
   ariaLabel: string;
   className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
 };
 
-export function Select({ value, onValueChange, options, ariaLabel, className = "" }: SelectProps) {
-  return <SelectPrimitive.Root value={value} onValueChange={onValueChange}>
-    <SelectPrimitive.Trigger className={`ui-select-trigger ${className}`} aria-label={ariaLabel}>
-      <SelectPrimitive.Value />
+export function Select({ value, onValueChange, options, ariaLabel, className = "", placeholder, disabled, required }: SelectProps) {
+  return <SelectPrimitive.Root value={value} onValueChange={onValueChange} required={required}>
+    <SelectPrimitive.Trigger className={`ui-select-trigger ${className}`} aria-label={ariaLabel} disabled={disabled}>
+      <SelectPrimitive.Value placeholder={placeholder} />
       <SelectPrimitive.Icon className="ui-select-chevron"><ChevronDown size={14} /></SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
     <SelectPrimitive.Portal>

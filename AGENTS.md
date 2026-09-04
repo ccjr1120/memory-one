@@ -39,3 +39,11 @@ Place additional worktrees in the parent directory of the primary checkout. Name
 ## GitHub Research Rule
 
 Use the authenticated `gh` CLI for GitHub repository searches, metadata inspection, and source browsing instead of direct web requests or browser search.
+
+## Local Deployment Rule
+
+The production deployment must be built in a temporary directory and copied to a directory outside the repository. Its database must also live in that deployment directory. The development service continues to use the source checkout's `data/` directory. Do not run the production service directly from the source checkout's `public/`, `dist/`, or database directories.
+
+## Defaults Before Environment Variables
+
+When the project already has a suitable default value, use that default directly instead of adding or requiring a new environment variable.

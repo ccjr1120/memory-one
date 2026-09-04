@@ -2,13 +2,12 @@ import { openSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const [port, logFile, pidFile] = process.argv.slice(2);
-if (!port || !logFile || !pidFile) throw new Error("usage: start-background.mjs <port> <log-file> <pid-file>");
+const [runtimeDir, port, logFile, pidFile] = process.argv.slice(2);
+if (!runtimeDir || !port || !logFile || !pidFile) throw new Error("usage: start-background.mjs <runtime-dir> <port> <log-file> <pid-file>");
 
-const rootDir = fileURLToPath(new URL("../", import.meta.url));
 const logFd = openSync(logFile, "a");
-const child = spawn(process.execPath, ["dist/server.js"], {
-  cwd: rootDir,
+const child = spawn(process.execPath, [`${runtimeDir}/dist/server.js`], {
+  cwd: runtimeDir,
   detached: true,
   env: { ...process.env, MEMORY_PORT: port },
   stdio: ["ignore", logFd, logFd],
