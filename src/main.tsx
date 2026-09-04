@@ -427,7 +427,7 @@ function App() {
     setShowComposer(false);
   };
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${view === "mcp" ? "app-shell-wide" : ""}`}>
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark">
@@ -721,7 +721,7 @@ function App() {
           )}
         </div>
       </main>
-      <aside className={`detail-panel ${selected ? "detail-open" : ""}`}>
+      {view !== "mcp" && <aside className={`detail-panel ${selected ? "detail-open" : ""}`}>
         <div className="detail-header">
           <span className="eyebrow">{copy.detailEyebrow}</span>
           {selected && (
@@ -745,7 +745,7 @@ function App() {
             <span>{copy.detailEmptyDesc}</span>
           </div>
         )}
-      </aside>
+      </aside>}
       {showComposer && (
         <Composer
           onClose={() => setShowComposer(false)}
@@ -941,6 +941,7 @@ function McpPage({ language }: { language: Language }) {
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"connection" | "keys" | "codex" | "usage">("connection");
   const host =
     typeof window !== "undefined" && window.location.hostname
       ? window.location.hostname
@@ -1042,7 +1043,13 @@ function McpPage({ language }: { language: Language }) {
           </span>
         </div>
       </div>
-      <div className="mcp-grid">
+      <nav className="mcp-tabs" role="tablist" aria-label="MCP 页面">
+        <button className={activeTab === "connection" ? "active" : ""} role="tab" aria-selected={activeTab === "connection"} onClick={() => setActiveTab("connection")}><Server size={15} />连接配置</button>
+        <button className={activeTab === "keys" ? "active" : ""} role="tab" aria-selected={activeTab === "keys"} onClick={() => setActiveTab("keys")}><KeyRound size={15} />Key 管理</button>
+        <button className={activeTab === "codex" ? "active" : ""} role="tab" aria-selected={activeTab === "codex"} onClick={() => setActiveTab("codex")}><FileCog size={15} />Codex 增强</button>
+        <button className={activeTab === "usage" ? "active" : ""} role="tab" aria-selected={activeTab === "usage"} onClick={() => setActiveTab("usage")}><Activity size={15} />调用统计</button>
+      </nav>
+      {activeTab === "connection" && <div className="mcp-grid" role="tabpanel">
         <section className="mcp-panel mcp-config">
           <div className="mcp-panel-header">
             <div>
@@ -1102,8 +1109,8 @@ function McpPage({ language }: { language: Language }) {
             <strong>{copy.categoryValue}</strong>
           </div>
         </section>
-      </div>
-      <section className="mcp-keys">
+      </div>}
+      {activeTab === "keys" && <section className="mcp-keys" role="tabpanel">
         <div className="mcp-tools-heading">
           <div>
             <span className="eyebrow">访问控制</span>
@@ -1120,8 +1127,8 @@ function McpPage({ language }: { language: Language }) {
         </div>
         {newKeySecret ? <div className="mcp-key-secret"><strong>Key 只会显示这一次</strong><code>{newKeySecret}</code><div><button className="icon-button" onClick={() => copyText(keyConfig, "key-config")} title="复制带 Key 的 MCP 配置">{copied === "key-config" ? <Check size={16} /> : <Copy size={16} />}</button><span>{copied === "key-config" ? "已复制配置" : "复制带 Authorization Header 的配置"}</span></div></div> : null}
         <div className="mcp-key-list">{mcpKeys.length ? mcpKeys.map((key) => <div className={`mcp-key-row ${key.revoked_at ? "revoked" : ""}`} key={key.id}><KeyRound size={15} /><div><strong>{key.name}{key.is_default ? " · 默认" : ""}</strong><code>{key.prefix}••••••••</code><span>{key.allowed_tools.length ? `可用工具 ${key.allowed_tools.length}/${mcpTools.length}` : "可调用全部工具"}{key.last_used_at ? ` · 最近使用 ${formatDate(key.last_used_at, language)}` : " · 尚未使用"}</span></div><button className="ghost-button" disabled={Boolean(key.revoked_at) || key.is_default} onClick={() => void revokeMcpKey(key.id)}>{key.is_default ? "默认 Key" : key.revoked_at ? "已撤销" : "撤销"}</button></div>) : <p className="mcp-key-empty">还没有创建 Key。</p>}</div>
-      </section>
-      <section className="codex-integration">
+      </section>}
+      {activeTab === "codex" && <section className="codex-integration" role="tabpanel">
         <div className="codex-integration-icon">
           <FileCog size={19} />
         </div>
@@ -1166,8 +1173,9 @@ function McpPage({ language }: { language: Language }) {
           )}
           {codexIntegration?.status === "configured" ? "已启用" : codexButton}
         </button>
-      </section>
-      <section className="mcp-usage">
+      </section>}
+      {activeTab === "usage" && <>
+      <section className="mcp-usage" role="tabpanel">
         <div className="mcp-tools-heading">
           <div>
             <span className="eyebrow">调用统计</span>
@@ -1233,6 +1241,7 @@ function McpPage({ language }: { language: Language }) {
           ))}
         </div>
       </section>
+      </>}
     </div>
   );
 }
