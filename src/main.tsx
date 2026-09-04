@@ -567,7 +567,7 @@ function App() {
                   {copy.newMemory}
                 </button>
               </section>
-              <section className="stat-grid">
+              {view !== "timeline" && <section className="stat-grid">
                 <Stat
                   label={copy.memories}
                   value={stats.total.toString().padStart(2, "0")}
@@ -591,7 +591,7 @@ function App() {
                     <span>{copy.localOnlyDesc}</span>
                   </div>
                 </div>
-              </section>
+              </section>}
               <section className="toolbar">
                 <div className="search-box">
                   <Search size={17} />
@@ -648,7 +648,7 @@ function App() {
                       : copy.sortRecent}
                 </span>
               </div>
-              <section className="memory-list">
+              <section className={view === "timeline" ? "timeline-list" : "memory-list"}>
                 {loadError && !loading && (
                   <div className="empty-state">
                     <FileText size={28} />
@@ -677,7 +677,15 @@ function App() {
                     </span>
                   </div>
                 )}
-                {!loadError && (view === "all" && project === "all"
+                {!loadError && view === "timeline" && (
+                  <TimelineEvents
+                    items={filtered}
+                    selectedId={selected?.id}
+                    onSelect={setSelected}
+                    language={language}
+                  />
+                )}
+                {!loadError && view !== "timeline" && (view === "all" && project === "all"
                   ? memoryGroups.map(([group, items]) => (
                       <div className="memory-group" key={group}>
                         <div className="memory-group-header">
@@ -823,6 +831,102 @@ const mcpTools = [
     "记录记忆是否有帮助的相关性信号。",
   ],
 ] as const;
+
+function timelineDay(value: string | null | undefined, language: Language) {
+  if (!value) return language === "zh" ? "未标记日期" : "Undated";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return language === "zh" ? "未标记日期" : "Undated";
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(date);
+}
+
+function timelineTime(value: string | null | undefined, language: Language) {
+  if (!value) return language === "zh" ? "未标记时间" : "No time";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return language === "zh" ? "未标记时间" : "No time";
+  return new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function TimelineEvents({
+  items,
+  selectedId,
+  onSelect,
+  language,
+}: {
+  items: Memory[];
+  selectedId?: string;
+  onSelect: (item: Memory) => void;
+  language: Language;
+}) {
+  const groups = useMemo(() => {
+    const sorted = [...items].sort((a, b) => {
+      const aTime = new Date(a.occurred_at ?? a.created_at).getTime();
+      const bTime = new Date(b.occurred_at ?? b.created_at).getTime();
+      return bTime - aTime;
+    });
+    const grouped = new Map<string, Memory[]>();
+    for (const item of sorted) {
+      const value = item.occurred_at ?? item.created_at;
+      const date = value ? new Date(value) : null;
+      const key = date && !Number.isNaN(date.getTime())
+        ? date.toISOString().slice(0, 10)
+        : "undated";
+      grouped.set(key, [...(grouped.get(key) ?? []), item]);
+    }
+    return [...grouped.entries()];
+  }, [items]);
+
+  return (
+    <div className="timeline-stream">
+      {groups.map(([day, dayItems]) => (
+        <section className="timeline-day" key={day}>
+          <header className="timeline-day-heading">
+            <time>{timelineDay(day === "undated" ? null : day, language)}</time>
+            <span className="mono">{dayItems.length.toString().padStart(2, "0")} 条</span>
+          </header>
+          <div className="timeline-day-items">
+            {dayItems.map((item) => {
+              const eventDate = item.occurred_at ?? item.created_at;
+              return (
+                <button
+                  className={`timeline-event ${selectedId === item.id ? "selected" : ""}`}
+                  key={item.id}
+                  onClick={() => onSelect(item)}
+                >
+                  <span className="timeline-event-rail" aria-hidden="true">
+                    <span className="timeline-dot" />
+                  </span>
+                  <span className="timeline-event-body">
+                    <span className="timeline-event-meta">
+                      <span className={`kind-badge kind-${item.kind}`}>
+                        {kindLabels[item.kind] ?? item.kind}
+                      </span>
+                      <time>{timelineTime(eventDate, language)}</time>
+                    </span>
+                    <strong>{item.content}</strong>
+                    <span className="timeline-event-context">
+                      {item.project ?? item.scope}
+                      <span aria-hidden="true">·</span>
+                      {item.source ?? "Agent 写入"}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function McpPage({ language }: { language: Language }) {
   const copy = ui[language];
   const [copied, setCopied] = useState<string | null>(null);
