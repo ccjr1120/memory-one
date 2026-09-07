@@ -10,6 +10,7 @@ import {
   useRouterState,
 } from "@tanstack/react-router";
 import {
+  AlertCircle,
   Activity,
   Archive,
   ArrowUpRight,
@@ -31,6 +32,7 @@ import {
   Menu,
   MessageCircle,
   Moon,
+  Pencil,
   Plus,
   Search,
   Send,
@@ -81,6 +83,7 @@ type McpKey = {
   id: string;
   name: string;
   prefix: string;
+  secret: string | null;
   allowed_tools: string[];
   created_at: string;
   last_used_at: string | null;
@@ -265,7 +268,7 @@ const ui = {
     cancel: "取消",
     save: "保存记忆",
     languageCode: "EN",
-    mcpKicker: "模型上下文协议",
+    mcpKicker: "Agent 集成",
     mcpTitle: "连接你的 Agent",
     mcpDescription:
       "Memory One 通过 Streamable HTTP 提供记忆工具。创建一个按工具授权的 Key 后，把带 Authorization Header 的配置加入 MCP 客户端。",
@@ -930,6 +933,7 @@ function TimelineEvents({
 function McpPage({ language }: { language: Language }) {
   const copy = ui[language];
   const [copied, setCopied] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [stats, setStats] = useState<McpToolStats | null>(null);
   const [codexIntegration, setCodexIntegration] =
     useState<CodexIntegration | null>(null);
@@ -941,7 +945,12 @@ function McpPage({ language }: { language: Language }) {
   const [newKeySecret, setNewKeySecret] = useState<string | null>(null);
   const [keyBusy, setKeyBusy] = useState(false);
   const [keyMessage, setKeyMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<"connection" | "keys" | "codex" | "usage">("connection");
+  const [showKeyForm, setShowKeyForm] = useState(false);
+  const [useBearerKey, setUseBearerKey] = useState<boolean | null>(null);
+  const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
+  const [editingKeyName, setEditingKeyName] = useState("");
+  const [activeTab, setActiveTab] = useState<"connection" | "usage">("connection");
+  const [showEnhancementModal, setShowEnhancementModal] = useState(false);
   const host =
     typeof window !== "undefined" && window.location.hostname
       ? window.location.hostname
@@ -950,7 +959,7 @@ function McpPage({ language }: { language: Language }) {
   const serverPort = pagePort === "5173" || !pagePort ? "8765" : pagePort;
   const endpoint = `http://${host}:${serverPort}/mcp/`;
   const config = JSON.stringify(
-    { mcpServers: { "memory-one": { type: "http", url: endpoint, headers: { Authorization: "Bearer <在 Key 管理中创建>" } } } },
+    { mcpServers: { "memory-one": { type: "http", url: endpoint, ...(useBearerKey === true ? { headers: { Authorization: "Bearer <在 Key 管理中创建>" } } : {}) } } },
     null,
     2,
   );
@@ -961,6 +970,7 @@ function McpPage({ language }: { language: Language }) {
     ? Math.round((stats.successful_calls / stats.total_calls) * 100)
     : 0;
   useEffect(() => {
+    fetch("/api/mcp/config").then((response) => response.json()).then((value: { use_bearer_key?: boolean }) => setUseBearerKey(value.use_bearer_key !== false));
     fetch("/api/mcp/stats")
       .then((response) => response.json())
       .then(setStats);
@@ -971,10 +981,22 @@ function McpPage({ language }: { language: Language }) {
       .then((response) => response.json())
       .then(setMcpKeys);
   }, []);
+  const updateBearerKey = (enabled: boolean) => {
+    setUseBearerKey(enabled);
+    void fetch("/api/mcp/config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ use_bearer_key: enabled }) });
+  };
   const copyText = async (value: string, key: string) => {
-    await navigator.clipboard?.writeText(value);
-    setCopied(key);
-    window.setTimeout(() => setCopied(null), 1500);
+    try {
+      if (!navigator.clipboard) throw new Error("clipboard_unavailable");
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      setCopyMessage("已复制到剪贴板");
+      window.setTimeout(() => setCopied(null), 1500);
+      window.setTimeout(() => setCopyMessage(null), 2200);
+    } catch {
+      setCopyMessage("复制失败，请手动复制");
+      window.setTimeout(() => setCopyMessage(null), 2600);
+    }
   };
   const installCodex = async () => {
     setCodexInstalling(true);
@@ -1009,9 +1031,18 @@ function McpPage({ language }: { language: Language }) {
     }
   };
   const revokeMcpKey = async (id: string) => {
+    const key = mcpKeys.find((item) => item.id === id);
+    if (!key || !window.confirm(`确定删除 Key“${key.name}”吗？删除后将立即失效，且无法恢复。`)) return;
     const response = await fetch(`/api/mcp/keys/${id}`, { method: "DELETE" });
     if (!response.ok) return;
-    setMcpKeys((current) => current.map((key) => key.id === id ? { ...key, revoked_at: new Date().toISOString() } : key));
+    setMcpKeys((current) => current.filter((item) => item.id !== id));
+  };
+  const renameMcpKey = async (id: string) => {
+    const response = await fetch(`/api/mcp/keys/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: editingKeyName }) });
+    if (!response.ok) return;
+    const updated = await response.json() as McpKey;
+    setMcpKeys((current) => current.map((key) => key.id === id ? updated : key));
+    setEditingKeyId(null);
   };
   const keyConfig = newKeySecret ? JSON.stringify({ mcpServers: { "memory-one": { type: "http", url: endpoint, headers: { Authorization: `Bearer ${newKeySecret}` } } } }, null, 2) : "";
   const codexStatus =
@@ -1025,30 +1056,14 @@ function McpPage({ language }: { language: Language }) {
       ? "更新全局指令"
       : "启用全局记忆";
   return (
-    <div className="mcp-page">
-      <div className="mcp-hero">
-        <div>
-          <div className="heading-kicker">
-            <span className="live-dot" />
-            {copy.mcpKicker}
-          </div>
-          <h1>{copy.mcpTitle}</h1>
-          <p>{copy.mcpDescription}</p>
-        </div>
-        <div className="mcp-status">
-          <span className="status-dot" />
-          <strong>{copy.mcpOnline}</strong>
-          <span className="mono">
-            {host}:{serverPort}
-          </span>
-        </div>
-      </div>
+    <div className={`mcp-page ${useBearerKey === null ? "mcp-loading" : ""}`}>
+      {copyMessage ? <div className={`copy-feedback ${copyMessage.startsWith("复制失败") ? "error" : ""}`} role="status">{copyMessage.startsWith("复制失败") ? <AlertCircle size={14} /> : <Check size={14} />}{copyMessage}</div> : null}
+      <div className="mcp-navigation">
       <nav className="mcp-tabs" role="tablist" aria-label="MCP 页面">
         <button className={activeTab === "connection" ? "active" : ""} role="tab" aria-selected={activeTab === "connection"} onClick={() => setActiveTab("connection")}><Server size={15} />连接配置</button>
-        <button className={activeTab === "keys" ? "active" : ""} role="tab" aria-selected={activeTab === "keys"} onClick={() => setActiveTab("keys")}><KeyRound size={15} />Key 管理</button>
-        <button className={activeTab === "codex" ? "active" : ""} role="tab" aria-selected={activeTab === "codex"} onClick={() => setActiveTab("codex")}><FileCog size={15} />Codex 增强</button>
         <button className={activeTab === "usage" ? "active" : ""} role="tab" aria-selected={activeTab === "usage"} onClick={() => setActiveTab("usage")}><Activity size={15} />调用统计</button>
       </nav>
+      </div>
       {activeTab === "connection" && <div className="mcp-grid" role="tabpanel">
         <section className="mcp-panel mcp-config">
           <div className="mcp-panel-header">
@@ -1056,13 +1071,9 @@ function McpPage({ language }: { language: Language }) {
               <span className="eyebrow">{copy.clientConfig}</span>
               <h2>{copy.mcpConfig}</h2>
             </div>
-            <button
-              className="icon-button"
-              onClick={() => copyText(config, "config")}
-              title={copy.mcpCopyConfig}
-            >
-              {copied === "config" ? <Check size={16} /> : <Copy size={16} />}
-            </button>
+            <div className="mcp-panel-actions">
+              <button className="mcp-codex-button" onClick={() => setShowEnhancementModal(true)} title="打开 Agent 增强"><FileCog size={14} />Agent 增强</button><button className="icon-button" onClick={() => copyText(config, "config")} title={copy.mcpCopyConfig}>{copied === "config" ? <Check size={16} /> : <Copy size={16} />}</button>
+            </div>
           </div>
           <pre>
             <code>{config}</code>
@@ -1099,81 +1110,34 @@ function McpPage({ language }: { language: Language }) {
               <i className="status-dot" />
               {copy.auth}
             </span>
-            <strong>{copy.noAuth}</strong>
+            <label className="switch-label"><span>Bearer Key</span><input type="checkbox" checked={useBearerKey === true} disabled={useBearerKey === null} onChange={(event) => updateBearerKey(event.target.checked)} /><i /></label>
           </div>
-          <div className="endpoint-meta">
-            <span>
-              <i className="status-dot" />
-              {copy.category}
-            </span>
-            <strong>{copy.categoryValue}</strong>
-          </div>
+          <div className="endpoint-tools"><span className="key-tools-label">支持的工具</span><div className="tool-chip-list">{mcpTools.map(([name]) => <span className="tool-chip" key={name}>{name}</span>)}</div></div>
         </section>
+        {useBearerKey === true && <section className="mcp-keys" role="region" aria-label="Key 管理">
+          <div className="mcp-tools-heading"><div><span className="eyebrow">访问控制</span><h2>MCP Key 管理</h2></div><KeyRound size={18} /></div>
+          <p className="mcp-key-note">为平台 Agent、Codex 或其他 MCP 客户端创建独立 Key，并按最小权限限制它可以调用的工具。</p>
+          <div className="mcp-key-create"><button className="primary-button" onClick={() => setShowKeyForm(true)}><KeyRound size={15} />创建 Key</button></div>
+          {newKeySecret ? <div className="mcp-key-secret"><strong>Key 已创建，可随时在下方再次复制</strong><code>{newKeySecret}</code><div><button className="icon-button" onClick={() => copyText(keyConfig, "key-config")} title="复制带 Key 的 MCP 配置">{copied === "key-config" ? <Check size={16} /> : <Copy size={16} />}</button><span>{copied === "key-config" ? "已复制配置" : "复制带 Authorization Header 的配置"}</span></div></div> : null}
+          <div className="mcp-key-list">{mcpKeys.length ? mcpKeys.map((key) => <div className="mcp-key-row" key={key.id}><KeyRound size={15} /><div>{editingKeyId === key.id ? <input className="mcp-key-name-input" autoFocus value={editingKeyName} onChange={(event) => setEditingKeyName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void renameMcpKey(key.id); if (event.key === "Escape") setEditingKeyId(null); }} onBlur={() => void renameMcpKey(key.id)} /> : <strong>{key.name}</strong>}<code>{key.prefix}••••••••</code><span>{key.allowed_tools.length ? `可用工具 ${key.allowed_tools.length}/${mcpTools.length}` : "可调用全部工具"}{key.last_used_at ? ` · 最近使用 ${formatDate(key.last_used_at, language)}` : " · 尚未使用"}</span><div className="tool-chip-list key-tool-list">{(key.allowed_tools.length ? key.allowed_tools : mcpTools.map(([name]) => name)).map((name) => <span className="tool-chip" key={name}>{name}</span>)}</div></div><div className="mcp-key-actions">{key.secret ? <button className="icon-button" onClick={() => copyText(key.secret!, `key-${key.id}`)} title="复制 Key">{copied === `key-${key.id}` ? <Check size={14} /> : <Copy size={14} />}</button> : null}<button className="icon-button" onClick={() => { setEditingKeyId(key.id); setEditingKeyName(key.name); }} title="修改名称"><Pencil size={14} /></button><button className="ghost-button" onClick={() => void revokeMcpKey(key.id)}>删除</button></div></div>) : <p className="mcp-key-empty">还没有创建 Key。</p>}</div>
+        </section>}
       </div>}
-      {activeTab === "keys" && <section className="mcp-keys" role="tabpanel">
-        <div className="mcp-tools-heading">
-          <div>
-            <span className="eyebrow">访问控制</span>
-            <h2>MCP Key 管理</h2>
-          </div>
-          <KeyRound size={18} />
-        </div>
-        <p className="mcp-key-note">服务启动时会自动保留一个拥有全部工具权限的默认 Key。为平台 Agent、Codex 或其他 MCP 客户端创建独立 Key，并按最小权限限制它可以调用的工具。</p>
-        <div className="mcp-key-create">
-          <label className="config-field"><span>Key 名称</span><input value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="例如：平台 Agent" /></label>
-          <div className="mcp-key-tools"><span className="key-tools-label">允许调用的工具</span><div className="key-tools-grid">{mcpTools.map(([name]) => <label key={name}><input type="checkbox" checked={keyTools.includes(name)} onChange={(event) => setKeyTools((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div></div>
-          <button className="primary-button" onClick={() => void createMcpKey()} disabled={keyBusy || keyTools.length === 0}>{keyBusy ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}创建 Key</button>
-          {keyMessage ? <p className="integration-message" role="alert">{keyMessage}</p> : null}
-        </div>
-        {newKeySecret ? <div className="mcp-key-secret"><strong>Key 只会显示这一次</strong><code>{newKeySecret}</code><div><button className="icon-button" onClick={() => copyText(keyConfig, "key-config")} title="复制带 Key 的 MCP 配置">{copied === "key-config" ? <Check size={16} /> : <Copy size={16} />}</button><span>{copied === "key-config" ? "已复制配置" : "复制带 Authorization Header 的配置"}</span></div></div> : null}
-        <div className="mcp-key-list">{mcpKeys.length ? mcpKeys.map((key) => <div className={`mcp-key-row ${key.revoked_at ? "revoked" : ""}`} key={key.id}><KeyRound size={15} /><div><strong>{key.name}{key.is_default ? " · 默认" : ""}</strong><code>{key.prefix}••••••••</code><span>{key.allowed_tools.length ? `可用工具 ${key.allowed_tools.length}/${mcpTools.length}` : "可调用全部工具"}{key.last_used_at ? ` · 最近使用 ${formatDate(key.last_used_at, language)}` : " · 尚未使用"}</span></div><button className="ghost-button" disabled={Boolean(key.revoked_at) || key.is_default} onClick={() => void revokeMcpKey(key.id)}>{key.is_default ? "默认 Key" : key.revoked_at ? "已撤销" : "撤销"}</button></div>) : <p className="mcp-key-empty">还没有创建 Key。</p>}</div>
-      </section>}
-      {activeTab === "codex" && <section className="codex-integration" role="tabpanel">
-        <div className="codex-integration-icon">
-          <FileCog size={19} />
-        </div>
-        <div className="codex-integration-copy">
-          <div className="codex-title-row">
-            <div>
-              <span className="eyebrow">Codex增强</span>
-              <h2>全局任务前置记忆</h2>
-            </div>
-            <span
-              className={`integration-status status-${codexIntegration?.status ?? "loading"}`}
-            >
-              {codexIntegration ? codexStatus : "读取中"}
-            </span>
-          </div>
-          <p>
-            由你主动写入 Codex 全局指令，让 Agent
-            在每项任务开始前检索相关经验。更新时只替换 Memory One 管理的区块。
-          </p>
-          <code className="integration-path">
-            {codexIntegration?.path ?? "正在读取配置路径..."}
-          </code>
-          {codexMessage && (
-            <div className="integration-message" role="status">
-              {codexMessage}
-            </div>
-          )}
-        </div>
-        <button
-          className="primary-button codex-action"
-          disabled={
-            !codexIntegration ||
-            codexInstalling ||
-            codexIntegration.status === "configured"
-          }
-          onClick={installCodex}
-        >
-          {codexInstalling ? (
-            <LoaderCircle className="spin" size={16} />
-          ) : (
-            <FileCog size={16} />
-          )}
-          {codexIntegration?.status === "configured" ? "已启用" : codexButton}
-        </button>
-      </section>}
+      {showKeyForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowKeyForm(false); }}><section className="key-create-modal" role="dialog" aria-modal="true" aria-label="创建 MCP Key">
+        <div className="composer-header"><div><span className="eyebrow">访问控制</span><h2>创建 MCP Key</h2></div><button className="icon-button" onClick={() => setShowKeyForm(false)} title="关闭"><X size={18} /></button></div>
+        <label className="config-field"><span>Key 名称</span><input autoFocus value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="例如：平台 Agent" /></label>
+        <div className="mcp-key-tools"><span className="key-tools-label">允许调用的工具</span><div className="key-tools-grid">{mcpTools.map(([name]) => <label key={name}><input type="checkbox" checked={keyTools.includes(name)} onChange={(event) => setKeyTools((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div></div>
+        <div className="modal-actions"><button className="ghost-button" onClick={() => setShowKeyForm(false)}>取消</button><button className="primary-button" onClick={() => { void createMcpKey(); setShowKeyForm(false); }} disabled={keyBusy || keyTools.length === 0}>{keyBusy ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}创建 Key</button></div>
+        {keyMessage ? <p className="integration-message" role="alert">{keyMessage}</p> : null}
+      </section></div>}
+      {showEnhancementModal && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowEnhancementModal(false); }}><section className="enhancement-modal" role="dialog" aria-modal="true" aria-label="Agent 增强">
+        <div className="composer-header"><div><span className="eyebrow">客户端增强</span><h2>Agent 增强</h2></div><button className="icon-button" onClick={() => setShowEnhancementModal(false)} title="关闭"><X size={18} /></button></div>
+        <p className="mcp-key-note">为开发 Agent 写入全局指令，让任务开始前主动读取 Memory One 中的相关记忆。</p>
+        <section className="codex-integration enhancement-panel">
+          <div className="codex-integration-icon"><FileCog size={19} /></div>
+          <div className="codex-integration-copy"><div className="codex-title-row"><div><span className="eyebrow">Codex</span><h2>全局任务前置记忆</h2></div><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div><p>将 Memory One 管理的全局指令写入 Codex 配置，让每项任务开始前检索相关经验。</p><code className="integration-path">{codexIntegration?.path ?? "正在读取配置路径..."}</code>{codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}</div>
+          <button className="primary-button codex-action" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
+        </section>
+      </section></div>}
       {activeTab === "usage" && <>
       <section className="mcp-usage" role="tabpanel">
         <div className="mcp-tools-heading">
@@ -1551,6 +1515,7 @@ type AgentMessage = {
   role: "user" | "assistant";
   content: string;
   toolCalls?: Array<{ name: string; label: string; count?: number }>;
+  created_at?: string;
 };
 type AgentSettings = {
   name: string;
@@ -1680,12 +1645,20 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
-  const [sending, setSending] = useState(false);
+  const [activeRequests, setActiveRequests] = useState(0);
   const [error, setError] = useState("");
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
+  const messagesRef = useRef<AgentMessage[]>(messages);
   const configured = isAgentConfigured(settings);
+  const sending = activeRequests > 0;
+
+  const persistMessage = async (message: AgentMessage) => {
+    await fetch("/api/agent/messages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: message.id, role: message.role, content: message.content, toolCalls: message.toolCalls ?? [] }) });
+  };
+
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
     let active = true;
@@ -1706,6 +1679,12 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
   }, []);
 
   useEffect(() => {
+    void fetch("/api/agent/messages").then((response) => response.ok ? response.json() : []).then((value: AgentMessage[]) => {
+      if (Array.isArray(value) && value.length) setMessages(value);
+    }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const handleOutsidePointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -1716,9 +1695,52 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
     return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
   }, [open]);
 
-  const send = async (value = draft) => {
+  const processMessage = async (content: string, userMessage: AgentMessage) => {
+    setActiveRequests((count) => count + 1);
+    try {
+      const assistantId = crypto.randomUUID();
+      const assistantMessage = { id: assistantId, role: "assistant" as const, content: "", toolCalls: [] };
+      setMessages((current) => [...current, assistantMessage]);
+      void persistMessage(assistantMessage);
+      setStreamingId(assistantId);
+      let assistantContent = "";
+      const response = await fetch("/api/agent/stream", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: content, user_message_id: userMessage.id, assistant_message_id: assistantId, provider: settings.provider, model: settings.model, base_url: settings.baseUrl || null, api_key: settings.apiKey || null, scope: settings.scope || null, auto_context: settings.autoContext, history: [...messagesRef.current, userMessage].slice(-12).map(({ role, content: text }) => ({ role, content: text })) }),
+      });
+      if (!response.ok || !response.body) throw new Error("agent_request_failed");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const toolCalls: NonNullable<AgentMessage["toolCalls"]> = [];
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+        const chunks = buffer.split(/\r?\n\r?\n/); buffer = chunks.pop() ?? "";
+        for (const chunk of chunks) {
+          const eventName = chunk.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
+          const dataLine = chunk.split(/\r?\n/).find((line) => line.startsWith("data:")); if (!dataLine) continue;
+          const data = JSON.parse(dataLine.slice(5).trim());
+          if (eventName === "delta") { assistantContent += String(data.text ?? ""); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: assistantContent } : item)); }
+          else if (eventName === "tool") { toolCalls.push(data as NonNullable<AgentMessage["toolCalls"]>[number]); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: [...toolCalls] } : item)); }
+          else if (eventName === "error") throw new Error(String(data.detail ?? "agent_request_failed"));
+          else if (eventName === "done") setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: Array.isArray(data.toolCalls) ? data.toolCalls : toolCalls } : item));
+        }
+        if (done) break;
+      }
+      setStreamingId(null); void persistMessage({ id: assistantId, role: "assistant", content: assistantContent, toolCalls });
+      if (toolCalls.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
+    } catch (caught) {
+      setStreamingId(null); const detail = caught instanceof Error ? caught.message : "";
+      setError(detail === "missing_base_url" ? "请先填写 Base URL。" : detail === "missing_api_key" ? "请先完成 Agent 配置。" : detail.startsWith("provider_http_") ? "模型供应商请求失败，请检查供应商、模型和 Base URL。" : "暂时无法连接记忆管家，请稍后再试。");
+    } finally {
+      setActiveRequests((count) => Math.max(0, count - 1));
+    }
+  };
+
+  const send = (value = draft) => {
     const content = value.trim();
-    if (!content || sending || !configured) return;
+    if (!content || !configured) return;
     if (content.toLowerCase() === "/new") {
       setDraft("");
       setError("");
@@ -1728,13 +1750,17 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
     }
     setDraft("");
     setError("");
-    setSending(true);
     const userMessage = { id: crypto.randomUUID(), role: "user" as const, content };
     setMessages((current) => [...current, userMessage]);
-    try {
+    void persistMessage(userMessage);
+    void processMessage(content, userMessage);
+    /* try {
       const assistantId = crypto.randomUUID();
-      setMessages((current) => [...current, { id: assistantId, role: "assistant", content: "", toolCalls: [] }]);
+      const assistantMessage = { id: assistantId, role: "assistant" as const, content: "", toolCalls: [] };
+      setMessages((current) => [...current, assistantMessage]);
+      void persistMessage(assistantMessage);
       setStreamingId(assistantId);
+      let assistantContent = "";
       const response = await fetch("/api/agent/stream", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1764,7 +1790,10 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
           const dataLine = chunk.split(/\r?\n/).find((line) => line.startsWith("data:"));
           if (!dataLine) continue;
           const data = JSON.parse(dataLine.slice(5).trim());
-          if (eventName === "delta") setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: item.content + String(data.text ?? "") } : item));
+          if (eventName === "delta") {
+            assistantContent += String(data.text ?? "");
+            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: assistantContent } : item));
+          }
           else if (eventName === "tool") { toolCalls.push(data as NonNullable<AgentMessage["toolCalls"]>[number]); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: [...toolCalls] } : item)); }
           else if (eventName === "error") throw new Error(String(data.detail ?? "agent_request_failed"));
           else if (eventName === "done") { const finalCalls = Array.isArray(data.toolCalls) ? data.toolCalls : toolCalls; setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: finalCalls } : item)); }
@@ -1772,14 +1801,14 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
         if (done) break;
       }
       setStreamingId(null);
+      void persistMessage({ id: assistantId, role: "assistant", content: assistantContent, toolCalls });
       if (toolCalls.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
     } catch (caught) {
       setStreamingId(null);
       const detail = caught instanceof Error ? caught.message : "";
       setError(detail === "missing_base_url" ? "请先填写 Base URL。" : detail === "missing_api_key" ? "请先完成 Agent 配置。" : detail.startsWith("provider_http_") ? "模型供应商请求失败，请检查供应商、模型和 Base URL。" : "暂时无法连接记忆管家，请稍后再试。");
-    } finally {
-      setSending(false);
-    }
+    } finally { setActiveRequests((count) => Math.max(0, count - 1)); }
+    */
   };
   const suggestions = ["总结我的特点", "搜索最近的项目约定", "记住我喜欢简洁的界面", "/new"];
   const openAgent = () => { setTab(isAgentConfigured(settings) ? "chat" : "config"); setOpen(true); };
@@ -1800,14 +1829,14 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
           {tab === "config" ? <AgentConfigForm initial={settings} onSaved={(next) => { setSettings(next); setTab(isAgentConfigured(next) ? "chat" : "config"); }} /> : <>
             <div className="agent-messages">
               {messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>
-                {message.role === "user" || message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}
-                {message.toolCalls?.length ? <div className="agent-tool-calls">{message.toolCalls.map((tool, index) => <span key={`${message.id}-tool-${index}`}><Check size={11} />{tool.label}{tool.count !== undefined ? ` · ${tool.count}` : ""}</span>)}</div> : null}
+                {message.role === "user" || message.content || message.role === "assistant" ? <div className="agent-message-bubble">{message.role === "assistant" ? (message.content ? <Streamdown mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text pending">等待回复...</span>) : <span className="agent-plain-text">{message.content}</span>}</div> : null}
+                {message.toolCalls?.length ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory_get_context" || (tool.count ?? 0) > 0).map((tool, index) => <span key={`${message.id}-tool-${index}`}><Check size={11} />{tool.label}{tool.count !== undefined ? ` · ${tool.count}` : ""}</span>)}</div> : null}
               </article>)}
               {sending && !streamingMessage?.content && <div className="agent-thinking" role="status" aria-label="正在处理"><LoaderCircle size={14} /><span className="agent-thinking-label">正在读取记忆并生成回复</span><i /><i /><i /></div>}
               {error && <p className="agent-error" role="alert">{error}</p>}
             </div>
-            <div className="agent-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)} disabled={sending}>{suggestion}</button>)}</div>
-            <form className="agent-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="告诉记忆管家你想做什么..." rows={1} disabled={sending} /><button className="agent-send" type="submit" disabled={!draft.trim() || sending} title="发送"><Send size={17} /></button></form>
+            <div className="agent-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)}>{suggestion}</button>)}</div>
+            <form className="agent-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="告诉记忆管家你想做什么..." rows={1} /><button className="agent-send" type="submit" disabled={!draft.trim()} title="发送"><Send size={17} /></button></form>
           </>}
         </section>}
       </div>

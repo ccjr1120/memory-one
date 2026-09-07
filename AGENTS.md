@@ -47,3 +47,7 @@ The production deployment must be built in a temporary directory and copied to a
 ## Defaults Before Environment Variables
 
 When the project already has a suitable default value, use that default directly instead of adding or requiring a new environment variable.
+
+## Agent Provider Protocols
+
+The `openai` provider uses the OpenAI Responses API; `openai-compatible` uses Chat Completions.

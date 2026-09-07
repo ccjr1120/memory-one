@@ -53,6 +53,7 @@ export type McpKey = {
   id: string;
   name: string;
   prefix: string;
+  secret: string | null;
   allowed_tools: string[];
   is_default: boolean;
   created_at: string;
@@ -135,6 +136,20 @@ export class MemoryStore {
         auto_context INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS agent_messages (
+        id TEXT PRIMARY KEY,
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL DEFAULT '',
+        tool_calls_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_messages_created ON agent_messages(created_at);
+      CREATE TABLE IF NOT EXISTS mcp_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        use_bearer_key INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT
+      );
       CREATE INDEX IF NOT EXISTS idx_mcp_keys_active ON mcp_keys(revoked_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content, kind, scope, project, source, content='memories', content_rowid='rowid'
@@ -159,7 +174,21 @@ export class MemoryStore {
     if (!columns.some((column) => column.name === "last_recalled_at")) this.db.exec("ALTER TABLE memories ADD COLUMN last_recalled_at TEXT");
     const keyColumns = this.db.prepare("PRAGMA table_info(mcp_keys)").all() as Array<{ name: string }>;
     if (!keyColumns.some((column) => column.name === "is_default")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
+    if (!keyColumns.some((column) => column.name === "secret")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN secret TEXT");
     this.rebuildFtsIfNeeded();
+  }
+
+  listAgentMessages(limit = 200) {
+    return (this.db.prepare("SELECT id, role, content, tool_calls_json, created_at, updated_at FROM agent_messages ORDER BY created_at ASC LIMIT ?").all(Math.min(Math.max(limit, 1), 1000)) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id), role: row.role as "user" | "assistant", content: String(row.content ?? ""), toolCalls: JSON.parse(String(row.tool_calls_json ?? "[]")), created_at: String(row.created_at), updated_at: String(row.updated_at),
+    }));
+  }
+
+  saveAgentMessage(message: { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown[] }) {
+    const timestamp = now();
+    this.db.prepare(`INSERT INTO agent_messages (id, role, content, tool_calls_json, created_at, updated_at) VALUES (@id, @role, @content, @tool_calls_json, @created_at, @updated_at)
+      ON CONFLICT(id) DO UPDATE SET content = excluded.content, tool_calls_json = excluded.tool_calls_json, updated_at = excluded.updated_at`).run({ id: message.id, role: message.role, content: message.content, tool_calls_json: JSON.stringify(message.toolCalls ?? []), created_at: timestamp, updated_at: timestamp });
+    return this.listAgentMessages(1000).find((item) => item.id === message.id);
   }
 
   private rebuildFtsIfNeeded() {
@@ -283,20 +312,20 @@ export class MemoryStore {
     const id = randomUUID();
     const secret = `mo_${randomBytes(24).toString("base64url")}`;
     const timestamp = now();
-    this.db.prepare("INSERT INTO mcp_keys (id, name, prefix, key_hash, allowed_tools_json, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .run(id, name, secret.slice(0, 11), createHash("sha256").update(secret).digest("hex"), JSON.stringify(allowedTools), isDefault ? 1 : 0, timestamp);
+    this.db.prepare("INSERT INTO mcp_keys (id, name, prefix, key_hash, secret, allowed_tools_json, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, name, secret.slice(0, 11), createHash("sha256").update(secret).digest("hex"), secret, JSON.stringify(allowedTools), isDefault ? 1 : 0, timestamp);
     return { key: secret, keyRecord: this.getMcpKey(id)! };
   }
 
   getMcpKey(id: string): McpKey | null {
-    const row = this.db.prepare("SELECT id, name, prefix, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    const row = this.db.prepare("SELECT id, name, prefix, secret, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys WHERE id = ?").get(id) as Record<string, unknown> | undefined;
     if (!row) return null;
     const { allowed_tools_json, is_default, ...rest } = row;
     return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey;
   }
 
   listMcpKeys(): McpKey[] {
-    return (this.db.prepare("SELECT id, name, prefix, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys ORDER BY created_at DESC").all() as Record<string, unknown>[]).map((row) => { const { allowed_tools_json, is_default, ...rest } = row; return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey; });
+    return (this.db.prepare("SELECT id, name, prefix, secret, allowed_tools_json, is_default, created_at, last_used_at, revoked_at FROM mcp_keys WHERE revoked_at IS NULL ORDER BY created_at DESC").all() as Record<string, unknown>[]).map((row) => { const { allowed_tools_json, is_default, ...rest } = row; return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey; });
   }
 
   updateMcpKey(id: string, patch: { name?: string; allowed_tools?: string[] }): McpKey | null {
@@ -309,7 +338,7 @@ export class MemoryStore {
   }
 
   revokeMcpKey(id: string): boolean {
-    return this.db.prepare("UPDATE mcp_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").run(now(), id).changes > 0;
+    return this.db.prepare("DELETE FROM mcp_keys WHERE id = ?").run(id).changes > 0;
   }
 
   verifyMcpKey(secret: string): McpKey | null {
@@ -321,16 +350,22 @@ export class MemoryStore {
     return { ...rest, is_default: Boolean(is_default), allowed_tools: JSON.parse(String(allowed_tools_json ?? "[]")) } as McpKey;
   }
 
-  ensureDefaultMcpKey() {
-    const existing = this.db.prepare("SELECT id FROM mcp_keys WHERE is_default = 1 AND revoked_at IS NULL LIMIT 1").get() as { id: string } | undefined;
-    if (existing) return this.getMcpKey(existing.id)!;
-    return this.createMcpKey("默认 Key", [], true).keyRecord;
-  }
-
   getAgentConfig(): AgentConfig {
     const row = this.db.prepare("SELECT name, scope, provider, model, base_url, api_key, auto_context, updated_at FROM agent_config WHERE id = 1").get() as Record<string, unknown> | undefined;
     if (!row) return { name: "记忆管家", scope: "", provider: "", model: "", base_url: "", api_key: "", auto_context: true, updated_at: null };
     return { ...row, auto_context: Boolean(row.auto_context) } as AgentConfig;
+  }
+
+  getMcpConfig(): { use_bearer_key: boolean; updated_at: string | null } {
+    const row = this.db.prepare("SELECT use_bearer_key, updated_at FROM mcp_config WHERE id = 1").get() as Record<string, unknown> | undefined;
+    return { use_bearer_key: row ? Boolean(row.use_bearer_key) : true, updated_at: row ? String(row.updated_at ?? "") || null : null };
+  }
+
+  saveMcpConfig(useBearerKey: boolean) {
+    const updatedAt = now();
+    this.db.prepare(`INSERT INTO mcp_config (id, use_bearer_key, updated_at) VALUES (1, @use_bearer_key, @updated_at)
+      ON CONFLICT(id) DO UPDATE SET use_bearer_key = excluded.use_bearer_key, updated_at = excluded.updated_at`).run({ use_bearer_key: useBearerKey ? 1 : 0, updated_at: updatedAt });
+    return this.getMcpConfig();
   }
 
   saveAgentConfig(input: Partial<Omit<AgentConfig, "updated_at">>): AgentConfig {

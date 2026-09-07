@@ -14,8 +14,8 @@ import { z } from "zod";
 import { MemoryStore, type AgentConfig, type MemoryInput } from "./storage.js";
 
 const store = new MemoryStore();
-store.ensureDefaultMcpKey();
 const internalMcpToken = randomUUID();
+let agentTurnQueue: Promise<void> = Promise.resolve();
 const json = (value: unknown) => ({ content: [{ type: "text" as const, text: JSON.stringify(value) }] });
 const storageScope = "user";
 const exposeMemory = (memory: any) => { if (!memory || typeof memory !== "object" || "error" in memory) return memory; const { project, ...rest } = memory; return { ...rest, scope: project ?? "global" }; };
@@ -24,13 +24,13 @@ const toStorageInput = (input: Record<string, unknown>) => { const { scope, ...r
 const toStoragePatch = (patch: Record<string, unknown>) => { const { scope, ...rest } = patch; return "scope" in patch ? { ...rest, project: typeof scope === "string" && scope !== "global" ? scope : null } : rest; };
 
 type AgentToolCall = { name: string; label: string; count?: number };
-type AgentChatRequest = { message?: string; history?: Array<{ role: "user" | "assistant"; content: string }>; provider?: string; model?: string; base_url?: string | null; api_key?: string | null; scope?: string | null; auto_context?: boolean };
+type AgentChatRequest = { message?: string; history?: Array<{ role: "user" | "assistant"; content: string }>; provider?: string; model?: string; base_url?: string | null; api_key?: string | null; scope?: string | null; auto_context?: boolean; user_message_id?: string; assistant_message_id?: string };
 type AgentEvent = { type: "delta"; text: string } | { type: "tool"; tool: AgentToolCall } | { type: "done"; toolCalls: AgentToolCall[] };
 type ProviderMessage = Record<string, unknown>;
 
 const agentSystemPrompt = "你是 Memory One 的记忆管家。你通过 MCP 工具管理用户的长期记忆，支持记忆的搜索、读取、保存、更新、删除和反馈。请先理解用户意图，涉及记忆事实时优先调用工具，不要编造记忆。删除前必须确认目标唯一；回复使用中文，简洁但可以使用 Markdown。";
 const toolLabels: Record<string, string> = { memory_get_context: "读取相关上下文", memory_search: "搜索记忆", memory_get: "读取记忆", memory_list: "列出记忆", memory_store: "保存记忆", memory_update: "更新记忆", memory_delete: "删除记忆", memory_feedback: "记录反馈" };
-const isMemoryOverviewRequest = (message: string) => /(?:有哪些|所有记忆|全部记忆|列出(?:全部)?|查看(?:全部)?|浏览全部|总结我的特点|概括我的特点|我的画像|我的偏好和特点)/.test(message);
+const isMemoryOverviewRequest = (message: string) => /(?:有哪些|所有记忆|全部记忆|列出(?:全部)?|查看(?:全部)?|浏览全部|总结(?:下)?(?:我的)?记忆|总结我的特点|概括我的特点|我的画像|我的偏好和特点|我的记忆(?:有什么)?特点|记忆特点)/.test(message);
 
 function sseEvent(type: string, payload: unknown) { return `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`; }
 
@@ -84,6 +84,34 @@ async function openAiRound(config: AgentChatRequest, messages: ProviderMessage[]
   return { content, toolCalls: [...calls.values()] };
 }
 
+function responsesInput(messages: ProviderMessage[]): Array<Record<string, unknown>> {
+  return messages.filter((message) => message.role !== "system").flatMap((message): Array<Record<string, unknown>> => {
+    if (message.role === "tool") return [{ type: "function_call_output", call_id: message.tool_call_id, output: message.content }];
+    if (message.role === "assistant" && Array.isArray(message.tool_calls)) {
+      return (message.tool_calls as Array<any>).map((call) => ({ type: "function_call", call_id: call.id, name: call.function.name, arguments: call.function.arguments }));
+    }
+    return [{ role: message.role, content: message.content }];
+  });
+}
+
+async function openAiResponsesRound(config: AgentChatRequest, messages: ProviderMessage[], tools: unknown[], emit: (event: AgentEvent) => void) {
+  const base = (config.base_url?.trim() || "").replace(/\/$/, "");
+  const system = messages.find((message) => message.role === "system")?.content;
+  const response = await fetch(`${base}/responses`, { method: "POST", headers: { "content-type": "application/json", ...(config.api_key ? { authorization: `Bearer ${config.api_key}` } : {}) }, body: JSON.stringify({ model: config.model || "", instructions: system, input: responsesInput(messages), tools: (tools as Array<any>).map((tool) => ({ type: "function", name: tool.function.name, description: tool.function.description, parameters: tool.function.parameters })), stream: false }) });
+  if (!response.ok) throw new Error(`provider_http_${response.status}: ${await response.text()}`);
+  const payload = await response.json() as any;
+  let content = "";
+  const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+  for (const item of payload.output ?? []) {
+    if (item.type === "message") {
+      for (const part of item.content ?? []) if (part.type === "output_text" && part.text) content += part.text;
+    }
+    if (item.type === "function_call") toolCalls.push({ id: item.call_id || item.id, name: item.name, arguments: item.arguments || "{}" });
+  }
+  if (content) emit({ type: "delta", text: content });
+  return { content, toolCalls };
+}
+
 async function anthropicRound(config: AgentChatRequest, messages: ProviderMessage[], tools: unknown[], emit: (event: AgentEvent) => void) {
   const base = (config.base_url?.trim() || "").replace(/\/$/, "");
   const system = messages.find((message) => message.role === "system")?.content;
@@ -131,7 +159,7 @@ async function runAgent(request: AgentChatRequest, emit: (event: AgentEvent) => 
       }
     }
     for (let round = 0; round < 6; round += 1) {
-      const result = provider === "anthropic" ? await anthropicRound(request, messages, tools, emit) : await openAiRound(request, messages, tools, emit);
+      const result = provider === "anthropic" ? await anthropicRound(request, messages, tools, emit) : provider === "openai" ? await openAiResponsesRound(request, messages, tools, emit) : await openAiRound(request, messages, tools, emit);
       if (!result.toolCalls.length) { emit({ type: "done", toolCalls }); return; }
       if (provider === "anthropic") messages.push({ role: "assistant", content: [...(result.content ? [{ type: "text", text: result.content }] : []), ...result.toolCalls.map((call) => ({ type: "tool_use", id: call.id, name: call.name, input: JSON.parse(call.arguments || "{}") }))] });
       else messages.push({ role: "assistant", content: result.content || null, tool_calls: result.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.arguments } })) });
@@ -255,6 +283,8 @@ app.get("/api/memories", async (request) => { const q = request.query as { scope
 app.get("/api/search", async (request) => { const q = request.query as { query: string; scope?: string; project?: string; limit?: string }; return store.recordRecalls(store.search(q.query, q.scope ?? "user", q.project ?? null, Number(q.limit ?? 20))); });
 app.get("/api/memories/most-recalled", async (request) => { const q = request.query as { scope?: string; project?: string; limit?: string }; return store.mostRecalled(q.scope ?? "user", q.project ?? null, Number(q.limit ?? 5)); });
 app.get("/api/mcp/stats", async () => store.getToolStats());
+app.get("/api/mcp/config", async () => store.getMcpConfig());
+app.put("/api/mcp/config", async (request) => store.saveMcpConfig(Boolean((request.body as { use_bearer_key?: boolean } | undefined)?.use_bearer_key)));
 app.get("/api/mcp/keys", async () => store.listMcpKeys());
 app.post("/api/mcp/keys", async (request, reply) => {
   const body = (request.body as { name?: string; allowed_tools?: string[] } | undefined) ?? {};
@@ -281,6 +311,12 @@ app.get("/api/agent/config", async () => store.getAgentConfig());
 app.put("/api/agent/config", async (request, reply) => {
   const body = (request.body as Partial<AgentConfig> | undefined) ?? {};
   return reply.send(store.saveAgentConfig(body));
+});
+app.get("/api/agent/messages", async () => store.listAgentMessages());
+app.post("/api/agent/messages", async (request, reply) => {
+  const body = request.body as { id?: string; role?: "user" | "assistant"; content?: string; toolCalls?: unknown[] } | undefined;
+  if (!body?.id || !body.role || typeof body.content !== "string") return reply.code(422).send({ detail: "message_required" });
+  return store.saveAgentMessage({ id: body.id, role: body.role, content: body.content, toolCalls: body.toolCalls });
 });
 app.post("/api/agent/chat", async (request, reply) => {
   try {
@@ -320,10 +356,30 @@ app.post("/api/agent/models", async (request, reply) => {
   }
 });
 app.post("/api/agent/stream", async (request, reply) => {
+  const body = ((request.body as AgentChatRequest | undefined) ?? {});
+  const userMessageId = body.user_message_id;
+  const assistantMessageId = body.assistant_message_id;
+  if (userMessageId && body.message) store.saveAgentMessage({ id: userMessageId, role: "user", content: body.message });
+  if (assistantMessageId) store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content: "", toolCalls: [] });
+  let assistantContent = "";
+  let assistantTools: AgentToolCall[] = [];
   reply.hijack();
   reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" });
+  const turn = agentTurnQueue.then(async () => {
+    const allMessages = store.listAgentMessages(1000).filter((item) => item.content);
+    const currentIndex = userMessageId ? allMessages.findIndex((item) => item.id === userMessageId) : allMessages.length - 1;
+    const storedHistory = allMessages.slice(0, Math.max(0, currentIndex)).map((item) => ({ role: item.role, content: item.content })).slice(-12);
+    await runAgent({ ...body, history: storedHistory }, (event) => {
+      if (event.type === "delta") assistantContent += event.text;
+      if (event.type === "tool") assistantTools = [...assistantTools, event.tool];
+      if (event.type === "done") assistantTools = event.toolCalls;
+      if (assistantMessageId) store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content: assistantContent, toolCalls: assistantTools });
+      if (!reply.raw.destroyed) reply.raw.write(sseEvent(event.type, event.type === "delta" ? { text: event.text } : event.type === "tool" ? event.tool : { toolCalls: event.toolCalls }));
+    });
+  });
+  agentTurnQueue = turn.catch(() => undefined);
   try {
-    await runAgent((request.body as AgentChatRequest | undefined) ?? {}, (event) => { reply.raw.write(sseEvent(event.type, event.type === "delta" ? { text: event.text } : event.type === "tool" ? event.tool : { toolCalls: event.toolCalls })); });
+    await turn;
   } catch (error) {
     request.log.error(error);
     reply.raw.write(sseEvent("error", { detail: error instanceof Error ? error.message : "agent_request_failed" }));
