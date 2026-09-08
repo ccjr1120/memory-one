@@ -4,6 +4,10 @@ Implement only the smallest direct change required by the confirmed request. Do 
 
 When an out-of-scope concern is discovered, mention it briefly instead of expanding the implementation.
 
+## README Policy
+
+`README.md` is end-user usage documentation only. Keep development setup, release procedures, screenshot-generation instructions, and implementation details out of the README; place them in dedicated contributor documentation when needed.
+
 ## Runtime Preference
 
 This repository uses Node.js/TypeScript. Do not introduce Python runtime code or Python package configuration.
