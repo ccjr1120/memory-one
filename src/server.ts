@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -275,12 +276,24 @@ registerTool("memory_feedback", "Use after applying a retrieved memory or when t
 
 const app = Fastify({ logger: true });
 const publicDir = join(fileURLToPath(new URL(".", import.meta.url)), "../public");
+const packageJsonPath = join(fileURLToPath(new URL(".", import.meta.url)), "../package.json");
+const packageVersion = JSON.parse(readFileSync(packageJsonPath, "utf8")).version as string;
 app.register(fastifyStatic, { root: publicDir, prefix: "/" });
 
 for (const frontendRoute of ["/", "/timeline", "/archive", "/preferences", "/scopes", "/tags", "/settings", "/mcp-service"]) {
   app.get(frontendRoute, async (_, reply) => reply.sendFile("index.html"));
 }
 app.get("/api/memories", async (request) => { const q = request.query as { scope?: string; project?: string; limit?: string }; return store.list(q.scope ?? "user", q.project ?? null, Number(q.limit ?? 50)); });
+app.get("/api/version", async () => {
+  try {
+    const response = await fetch("https://registry.npmjs.org/@ccjr1120%2Fmemory-one/latest", { signal: AbortSignal.timeout(2000), headers: { accept: "application/json" } });
+    if (!response.ok) return { current: packageVersion, latest: null, updateAvailable: false };
+    const latest = String(((await response.json()) as { version?: unknown }).version ?? "");
+    return { current: packageVersion, latest: latest || null, updateAvailable: Boolean(latest && latest !== packageVersion) };
+  } catch {
+    return { current: packageVersion, latest: null, updateAvailable: false };
+  }
+});
 app.get("/api/search", async (request) => { const q = request.query as { query: string; scope?: string; project?: string; limit?: string }; return store.recordRecalls(store.search(q.query, q.scope ?? "user", q.project ?? null, Number(q.limit ?? 20))); });
 app.get("/api/memories/most-recalled", async (request) => { const q = request.query as { scope?: string; project?: string; limit?: string }; return store.mostRecalled(q.scope ?? "user", q.project ?? null, Number(q.limit ?? 5)); });
 app.get("/api/mcp/stats", async () => store.getToolStats());

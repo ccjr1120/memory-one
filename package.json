@@ -1,9 +1,29 @@
 {
-  "name": "memory-one",
+  "name": "@ccjr1120/memory-one",
   "version": "0.1.0",
-  "private": true,
   "description": "A local HTTP MCP service for personal agent memory",
   "type": "module",
+  "bin": {
+    "memory-one": "bin/memory-one.mjs"
+  },
+  "files": [
+    "bin",
+    "dist/server.js",
+    "dist/server.js.map",
+    "dist/storage.js",
+    "dist/storage.js.map",
+    "public",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ccjr1120/memory-one.git"
+  },
+  "homepage": "https://github.com/ccjr1120/memory-one#readme",
+  "bugs": "https://github.com/ccjr1120/memory-one/issues",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -17,6 +37,8 @@
     "build:server": "tsc -p tsconfig.json",
     "build": "npm run build:web && npm run build:server",
     "test": "tsx --test src/*.test.ts",
+    "v": "node scripts/bump-version.mjs",
+    "prepublishOnly": "npm test && npm run build",
     "start": "node dist/server.js"
   },
   "dependencies": {
@@ -33,11 +55,13 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@inquirer/prompts": "^8.7.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^5.2.0",
+    "semver": "^7.8.5",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3",
     "vite": "^7.3.6"

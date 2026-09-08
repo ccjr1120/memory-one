@@ -167,7 +167,20 @@ Memory One 只会替换自己管理的 `memory-one:codex` 标记区块，保留 
 
 ## 本地生产模式
 
-如果希望构建后作为后台服务运行：
+通过 npm 全局安装后，可以使用 CLI 管理本地服务：
+
+```bash
+npm install -g @ccjr1120/memory-one
+memory-one start
+  memory-one status
+  memory-one open
+  memory-one update
+  memory-one stop
+```
+
+服务默认运行在 <http://127.0.0.1:23888/>，MCP 地址为 <http://127.0.0.1:23888/mcp/>。数据库、PID 和日志保存在 `~/.local/share/memory-one`，不会写入 npm 包目录。执行 `memory-one update` 会更新全局 CLI，并在服务运行时自动重启服务。
+
+从源码 checkout 安装并启动：
 
 ```bash
 npm run install:local
@@ -183,6 +196,36 @@ npm run install:local
 - 日志：`data/memory-one.log`
 
 生产服务请使用 `npm run install:local`，它会在临时目录构建并把版本复制到上面的部署目录后启动。
+
+## 发布到 npm
+
+仓库已经包含 GitHub Actions 发布流程：每次推送 `main` 时，工作流会自动递增一个 patch 版本，npm 发布前会运行测试和构建，发布成功后再提交新的 `package.json` 与 `package-lock.json`。自动生成的版本提交不会再次触发发布循环。
+
+首次配置需要完成两件事：
+
+1. 在 npm 登录 `ccjr1120` 账号，进入 **Access Tokens** 创建一个具备发布权限的 token；包名是 scoped 包 `@ccjr1120/memory-one`。
+2. 在 GitHub 仓库的 **Settings → Secrets and variables → Actions → New repository secret** 中添加：
+
+   - Name：`NPM_TOKEN`
+   - Secret：刚才复制的 npm token
+
+这个 workflow 当前读取的就是 GitHub Actions 的 **Repository secret**，不会把 token 写入代码。若 npm 账号并不是 `ccjr1120`，则不能发布这个 scope，需要先使用自己账号对应的 scope。
+
+首次配置完成后，日常发布不需要手动切换分支或运行版本脚本，直接推送 `main` 即可：
+
+```bash
+git push origin main
+```
+
+例如当前版本为 `0.1.0` 时，推送一次 `main` 会自动发布 `@ccjr1120/memory-one@0.1.1`。`npm run v` 仍保留给需要手动发布 minor、major 或特殊 release 分支的场景。
+
+本地全局安装后，使用下面的命令检查并更新到 npm 上的最新版本；如果服务正在运行，更新完成后会自动重启：
+
+```bash
+memory-one update
+```
+
+打开记忆工作台时，前端会检查当前版本和 npm 最新版本；发现新版本时会在顶部显示 3 秒通知条。
 
 ## 常见问题
 

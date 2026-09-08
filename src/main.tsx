@@ -93,6 +93,7 @@ type CodexIntegration = {
   path: string;
   status: "not_configured" | "configured" | "update_available";
 };
+type VersionNotice = { current: string; latest: string };
 const kinds = ["all", "fact", "preference", "episode", "procedure", "message"];
 type Language = "zh";
 const kindLabels: Record<string, string> = {
@@ -324,6 +325,7 @@ function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
   const load = async (search = query) => {
     setLoading(true);
     setLoadError(false);
@@ -356,6 +358,22 @@ function App() {
   }, [dark]);
   useEffect(() => {
     document.documentElement.lang = "zh-CN";
+  }, []);
+  useEffect(() => {
+    let active = true;
+    let timer: number | undefined;
+    void fetch("/api/version")
+      .then((response) => response.ok ? response.json() as Promise<{ current?: string; latest?: string | null; updateAvailable?: boolean }> : null)
+      .then((version) => {
+        if (!active || !version?.updateAvailable || !version.current || !version.latest) return;
+        setVersionNotice({ current: version.current, latest: version.latest });
+        timer = window.setTimeout(() => setVersionNotice(null), 3000);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -431,6 +449,12 @@ function App() {
   };
   return (
     <div className={`app-shell ${view === "mcp" ? "app-shell-wide" : ""}`}>
+      {versionNotice && (
+        <div className="version-notice" role="status">
+          <Sparkles size={14} />
+          <span>发现新版本 {versionNotice.latest}，当前版本 {versionNotice.current}</span>
+        </div>
+      )}
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark">
