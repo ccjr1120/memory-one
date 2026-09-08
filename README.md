@@ -171,14 +171,14 @@ Memory One 只会替换自己管理的 `memory-one:codex` 标记区块，保留 
 
 ```bash
 npm install -g @ccjr1120/memory-one
-memory-one start
-  memory-one status
-  memory-one open
-  memory-one update
-  memory-one stop
+memoryone start
+memoryone status
+memoryone open
+memoryone update
+memoryone stop
 ```
 
-服务默认运行在 <http://127.0.0.1:23888/>，MCP 地址为 <http://127.0.0.1:23888/mcp/>。数据库、PID 和日志保存在 `~/.local/share/memory-one`，不会写入 npm 包目录。执行 `memory-one update` 会更新全局 CLI，并在服务运行时自动重启服务。
+服务默认运行在 <http://127.0.0.1:23888/>，MCP 地址为 <http://127.0.0.1:23888/mcp/>。数据库、PID 和日志保存在 `~/.local/share/memory-one`，不会写入 npm 包目录。执行 `memoryone update` 会更新全局 CLI，并在服务运行时自动重启服务。若启动时端口 `23888` 已被占用，CLI 会询问是否终止占用进程。
 
 从源码 checkout 安装并启动：
 
@@ -222,7 +222,7 @@ git push origin main
 本地全局安装后，使用下面的命令检查并更新到 npm 上的最新版本；如果服务正在运行，更新完成后会自动重启：
 
 ```bash
-memory-one update
+memoryone update
 ```
 
 打开记忆工作台时，前端会检查当前版本和 npm 最新版本；发现新版本时会在顶部显示 3 秒通知条。

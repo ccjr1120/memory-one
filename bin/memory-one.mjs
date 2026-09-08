@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { dirname, join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -39,12 +40,45 @@ function currentPid() {
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+function listeningPids() {
+  if (platform() === "win32") return [];
+  try {
+    return execFileSync("lsof", [`-tiTCP:${port}`, "-sTCP:LISTEN"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).split(/\s+/).filter(Boolean).map(Number);
+  } catch {
+    return [];
+  }
+}
+
+async function releaseOccupiedPort() {
+  const pids = listeningPids();
+  if (!pids.length) return true;
+  const prompt = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await prompt.question(`端口 ${port} 已被进程 ${pids.join(", ")} 占用，是否终止占用进程？[y/N] `);
+  prompt.close();
+  if (!/^(y|yes|是)$/i.test(answer.trim())) {
+    console.log("已取消启动。");
+    return false;
+  }
+  for (const pid of pids) {
+    try { process.kill(pid, "SIGTERM"); } catch {}
+  }
+  await wait(500);
+  for (const pid of listeningPids()) {
+    try { process.kill(pid, "SIGKILL"); } catch {}
+  }
+  return true;
+}
+
 async function start() {
   const runningPid = currentPid();
   if (runningPid) {
     console.log(`Memory One 已在运行（PID ${runningPid}）：${url}`);
     return;
   }
+  if (!await releaseOccupiedPort()) return;
   mkdirSync(dataDir, { recursive: true });
   const logFd = openSync(logFile, "a");
   const child = spawn(process.execPath, [join(packageRoot, "dist", "server.js")], {
@@ -118,7 +152,7 @@ function openApp() {
 }
 
 function help() {
-  console.log(`Memory One\n\n用法：\n  memory-one start   启动本地服务\n  memory-one stop    停止本地服务\n  memory-one status  查看运行状态\n  memory-one open    打开工作台\n  memory-one update  更新到最新版本`);
+  console.log(`Memory One\n\n用法：\n  memoryone start   启动本地服务\n  memoryone stop    停止本地服务\n  memoryone status  查看运行状态\n  memoryone open    打开工作台\n  memoryone update  更新到最新版本`);
 }
 
 const command = process.argv[2];

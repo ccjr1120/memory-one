@@ -51,3 +51,7 @@ When the project already has a suitable default value, use that default directly
 ## Agent Provider Protocols
 
 The `openai` provider uses the OpenAI Responses API; `openai-compatible` uses Chat Completions.
+
+## Production CLI Convention
+
+The globally installed CLI command is `memoryone` without a hyphen. When `memoryone start` finds port `23888` occupied, ask the user whether to terminate the occupying process instead of failing immediately.

@@ -4,7 +4,7 @@
   "description": "A local HTTP MCP service for personal agent memory",
   "type": "module",
   "bin": {
-    "memory-one": "bin/memory-one.mjs"
+    "memoryone": "bin/memory-one.mjs"
   },
   "files": [
     "bin",
