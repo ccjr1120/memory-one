@@ -6,7 +6,7 @@
 
 Memory One 是个人长期记忆工作台：浏览器管理偏好、事实、决策、流程和纠正意见；外部 Agent 通过 Streamable HTTP MCP 读写记忆。核心承诺是“每轮任务开始先检索相关经验”。数据默认仅保存于本机 SQLite。
 
-范围是单机单用户，不含账号、云同步、多租户权限。`scope` 是分类字段而非安全隔离边界；省略表示全局记忆，常用值为仓库名（如 `memory-one`）。
+范围是单机单用户，不含账号、云同步、多租户权限。`scope` 是分类字段而非安全隔离边界；省略表示全局记忆，项目值使用仓库根目录的绝对路径。
 
 ## 2. 总体架构
 
@@ -37,7 +37,7 @@ Fastify 应用服务器 (8765)
 
 | 工具 | 输入 | 行为 |
 | --- | --- | --- |
-| `memory_get_context` | `query?`, `scope?`, `limit` 默认 10 | 有 query 搜索，无 query 列出；每项任务开始调用一次 |
+| `memory_get_context` | `query?`, `scope?`, `limit` 默认 10 | 项目 scope 联合召回项目与全局记忆；省略 scope 仅召回全局；每项任务开始调用一次 |
 | `memory_search` | `query`, `scope?`, `limit` 默认 20 | FTS 搜索并记录召回 |
 | `memory_store` | `content`, `kind?`, `scope?`, `confidence?`, `importance?`, `metadata?` 等 | 创建，默认 kind=`fact`、confidence=1、importance=.5 |
 | `memory_get` | `memory_id` | 返回单项；不存在返回 `memory_not_found` |

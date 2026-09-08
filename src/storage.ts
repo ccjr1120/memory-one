@@ -248,6 +248,34 @@ export class MemoryStore {
     return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
   }
 
+  context(query: string | null, scope = "user", project: string | null = null, limit = 10): Memory[] {
+    const max = Math.min(Math.max(limit, 1), 100);
+    const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
+    const params = { query, scope, project, limit: max };
+    let rows: unknown[] = [];
+    if (query) {
+      try {
+        rows = this.db.prepare(`SELECT m.*, bm25(memories_fts) AS score
+          FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
+          WHERE memories_fts MATCH @query AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
+          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, score LIMIT @limit`).all(params) as unknown[];
+      } catch {
+        rows = [];
+      }
+      if (!rows.length) {
+        rows = this.db.prepare(`SELECT m.* FROM memories m
+          WHERE m.content LIKE @pattern AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
+          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
+          .all({ ...params, pattern: `%${query}%` }) as unknown[];
+      }
+    } else {
+      rows = this.db.prepare(`SELECT m.* FROM memories m
+        WHERE m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
+        ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all(params) as unknown[];
+    }
+    return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
+  }
+
   recordRecalls(memories: Memory[]): Memory[] {
     if (!memories.length) return memories;
     const timestamp = now();

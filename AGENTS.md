@@ -20,7 +20,7 @@ The current frontend release uses Chinese UI copy. User-authored memory content 
 
 ## Memory Classification
 
-`scope` is an optional classification field, not a required isolation boundary. A stable project directory or repository name (for this repository, `memory-one`) is one recommended scope value for project-specific preferences and knowledge, alongside values such as `work` or `personal`. MCP calls may omit `scope` for general-purpose searches or pass it as a category filter; do not require every memory or Agent call to include a scope.
+`scope` is an optional classification field, not a required isolation boundary. Use the repository root's absolute directory path as the scope for project-specific preferences and knowledge; if the project moves or is synchronized to another computer, update the stored path through the synchronization workflow. Values such as `work` or `personal` may still be used for non-project categories. MCP calls may omit `scope` for general-purpose searches or pass it as a category filter; do not require every memory or Agent call to include a scope.
 
 ## Memory Retrieval Intent
 

@@ -111,7 +111,7 @@ MCP 服务默认要求 Bearer Key。进入 **MCP 服务 → MCP Key 管理** 创
 
 仅仅把 MCP 服务配置给 Codex，并不能保证每个任务都会先读取记忆。Codex 增强会把一小段全局工作指令写入 `~/.codex/AGENTS.md`，明确要求 Codex：
 
-> 开始任何任务前，先调用一次 `memory_get_context`，再参考返回的偏好、决策和经验。
+> 开始任何任务前，先调用一次 `memory_get_context`；在 Git 项目中使用仓库根目录的绝对路径作为 `scope`。
 
 这样做的价值是把“先查记忆”变成稳定的任务前动作，而不是依赖你每次手动提醒。它适合经常在多个仓库之间切换、需要持续遵守项目约定，或希望 Agent 记住修正意见的场景。
 
@@ -154,7 +154,7 @@ Memory One 只会替换自己管理的 `memory-one:codex` 标记区块，保留 
 
 ### Scope 怎么填
 
-`scope` 是分类字段，不是强制隔离边界。项目记忆可以使用稳定的仓库名，例如 `memory-one`；通用偏好可以省略 `scope`。客户端不传 `scope` 时，会搜索全部记忆。
+`scope` 是分类字段，不是安全隔离边界。项目记忆使用仓库根目录的绝对路径，例如 `/Users/name/code/memory-one`；通用偏好省略 `scope`。`memory_get_context` 传入项目 `scope` 时联合召回当前项目与全局记忆，不传时只召回全局记忆；`memory_search` 不传 `scope` 时仍可跨分类搜索。
 
 ## 数据与配置
 
