@@ -24,6 +24,8 @@ Use a frontend framework for the web UI rather than plain HTML/JavaScript. Visua
 
 The current frontend release uses Chinese UI copy. User-authored memory content is displayed as entered.
 
+Keep the MCP service endpoint card compact. The Codex card should show only the necessary connection and task-memory status/actions; omit redundant headings, authentication-state labels such as “无需 Key”, configuration paths, and implementation explanations.
+
 ## Development Command
 
 `npm run dev` must start the backend and frontend together. Before starting, clear the development ports used by the project (currently `8765` and `5173`) so stale processes do not cause port conflicts.

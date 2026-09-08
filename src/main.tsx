@@ -1139,52 +1139,36 @@ function McpPage({ language }: { language: Language }) {
             </button>
           </div>
           <div className="endpoint-value">{endpoint}</div>
-          <div className="endpoint-meta">
-            <span>
-              <i className="status-dot" />
-              {copy.transport}
-            </span>
-            <strong>Streamable HTTP</strong>
-          </div>
-          <div className="endpoint-meta">
-            <span>
-              <i className="status-dot" />
-              {copy.auth}
-            </span>
+          <div className="endpoint-compact-meta">
+            <span><i className="status-dot" />Streamable HTTP</span>
             <label className="switch-label"><span>Bearer Key</span><input type="checkbox" checked={useBearerKey === true} disabled={useBearerKey === null} onChange={(event) => updateBearerKey(event.target.checked)} /><i /></label>
           </div>
-          <div className="endpoint-tools"><span className="key-tools-label">支持的工具</span><div className="tool-chip-list">{mcpTools.map(([name]) => <span className="tool-chip" key={name}>{name}</span>)}</div></div>
         </section>
         <section className="mcp-panel codex-mcp-panel">
-          <div className="mcp-panel-header">
-            <div>
-              <span className="eyebrow">Codex</span>
-              <h2>连接与增强</h2>
-            </div>
-            <span className={`integration-status status-${codexMcpIntegration?.status ?? "loading"}`}>{codexMcpIntegration ? codexMcpStatus : "检测中"}</span>
-          </div>
-          <p className="codex-mcp-description">{codexMcpIntegration?.detected ? "已检测到 Codex 配置文件。" : "尚未发现 Codex 配置文件，配置时将自动创建。"}{useBearerKey === true ? "选择 MCP Key 后，可以自动写入 Memory One 连接。" : useBearerKey === false ? "当前已关闭认证，将直接写入无需 Key 的 Memory One 连接。" : "正在读取 MCP 认证状态。"}</p>
-          <code className="integration-path">{codexMcpIntegration?.path ?? "正在检测 Codex 配置..."}</code>
-          <div className="codex-mcp-controls">
-            {useBearerKey === true ? <label className="config-field">
-              <span>MCP Key</span>
-              <select value={codexMcpKeyId} onChange={(event) => setCodexMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
+          <div className="codex-compact-list">
+            <section className="codex-compact-row">
+              <div className="codex-compact-copy">
+                <div className="codex-compact-title"><strong>MCP 连接</strong><span className={`integration-status status-${codexMcpIntegration?.status ?? "loading"}`}>{codexMcpIntegration ? codexMcpStatus : "检测中"}</span></div>
+                <p>{useBearerKey === true ? "选择 Key 后自动写入连接配置。" : useBearerKey === false ? "自动写入连接配置。" : "正在读取认证状态。"}</p>
+                {codexMcpMessage ? <div className="integration-message" role="status">{codexMcpMessage}</div> : null}
+              </div>
+              <div className="codex-compact-actions">
+                {useBearerKey === true ? <select aria-label="MCP Key" value={codexMcpKeyId} onChange={(event) => setCodexMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
                 {mcpKeys.filter((key) => key.secret).map((key) => <option key={key.id} value={key.id}>{key.name} · {key.prefix}••••</option>)}
                 {!mcpKeys.some((key) => key.secret) ? <option value="">请先创建 MCP Key</option> : null}
-              </select>
-            </label> : <div className="codex-no-auth"><span>认证方式</span><strong>{useBearerKey === false ? "无需 Key" : "读取中"}</strong></div>}
-            <button className="primary-button" disabled={useBearerKey === null || !codexMcpIntegration || (useBearerKey === true && !codexMcpKeyId) || codexMcpInstalling || codexMcpConfigured} onClick={() => void installCodexMcp()}>
-              {codexMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}
-              {codexMcpConfigured ? "已配置" : codexMcpIntegration?.status === "not_configured" ? "配置 Codex" : "更新配置"}
-            </button>
+                </select> : null}
+                <button className="primary-button" disabled={useBearerKey === null || !codexMcpIntegration || (useBearerKey === true && !codexMcpKeyId) || codexMcpInstalling || codexMcpConfigured} onClick={() => void installCodexMcp()}>{codexMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}{codexMcpConfigured ? "已配置" : codexMcpIntegration?.status === "not_configured" ? "配置" : "更新"}</button>
+              </div>
+            </section>
+            <section className="codex-compact-row">
+              <div className="codex-compact-copy">
+                <div className="codex-compact-title"><strong>任务前置记忆</strong><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div>
+                <p>让 Codex 在每项任务开始前读取相关经验。</p>
+                {codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}
+              </div>
+              <button className="primary-button" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
+            </section>
           </div>
-          {codexMcpMessage ? <div className="integration-message" role="status">{codexMcpMessage}</div> : null}
-          <p className="codex-mcp-note">配置时会保留 Codex 的其他设置，只替换名为 <code>memory-one</code> 的 MCP 服务配置。</p>
-          <section className="codex-integration codex-mcp-enhancement">
-            <div className="codex-integration-icon"><FileCog size={19} /></div>
-            <div className="codex-integration-copy"><div className="codex-title-row"><div><span className="eyebrow">Codex 增强</span><h2>全局任务前置记忆</h2></div><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div><p>将 Memory One 管理的全局指令写入 Codex，让每项任务开始前主动检索相关经验。</p><code className="integration-path">{codexIntegration?.path ?? "正在读取配置路径..."}</code>{codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}</div>
-            <button className="primary-button codex-action" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
-          </section>
         </section>
         {useBearerKey === true && <section className="mcp-keys" role="region" aria-label="Key 管理">
           <div className="mcp-tools-heading"><div><span className="eyebrow">访问控制</span><h2>MCP Key 管理</h2></div><KeyRound size={18} /></div>
