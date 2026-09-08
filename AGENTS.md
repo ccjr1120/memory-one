@@ -8,6 +8,12 @@ When an out-of-scope concern is discovered, mention it briefly instead of expand
 
 `README.md` is end-user usage documentation only. Keep development setup, release procedures, screenshot-generation instructions, and implementation details out of the README; place them in dedicated contributor documentation when needed.
 
+Present the primary onboarding flow near the top in this order: install and start Memory One, then open **MCP 服务** and configure MCP. Codex connection setup and Codex-specific enhancement both belong in the Codex section; do not add a separate Agent enhancement entry point.
+
+Do not show a generic client configuration card on the MCP connection page. Detect and configure the `memory-one` connection in Codex's `config.toml` without replacing unrelated Codex settings.
+
+When Bearer Key authentication is disabled, the entire MCP service must accept requests without a Key. Generated and Codex configurations must omit Authorization headers, and Codex setup must not require selecting a Key.
+
 ## Runtime Preference
 
 This repository uses Node.js/TypeScript. Do not introduce Python runtime code or Python package configuration.
@@ -21,6 +27,10 @@ The current frontend release uses Chinese UI copy. User-authored memory content 
 ## Development Command
 
 `npm run dev` must start the backend and frontend together. Before starting, clear the development ports used by the project (currently `8765` and `5173`) so stale processes do not cause port conflicts.
+
+## Test Execution
+
+Do not run tests unless the user explicitly asks for them.
 
 ## Memory Classification
 

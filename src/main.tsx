@@ -93,6 +93,14 @@ type CodexIntegration = {
   path: string;
   status: "not_configured" | "configured" | "update_available";
 };
+type CodexMcpIntegration = {
+  path: string;
+  detected: boolean;
+  endpoint: string | null;
+  auth_required: boolean;
+  configured_key_id: string | null;
+  status: "not_configured" | "configured" | "update_available";
+};
 type VersionNotice = { current: string; latest: string };
 const kinds = ["all", "fact", "preference", "episode", "procedure", "message"];
 type Language = "zh";
@@ -274,12 +282,8 @@ const ui = {
     mcpDescription:
       "Memory One 通过 Streamable HTTP 提供记忆工具。创建一个按工具授权的 Key 后，把带 Authorization Header 的配置加入 MCP 客户端。",
     mcpOnline: "HTTP 在线",
-    mcpConfig: "通用 MCP 配置",
     mcpEndpoint: "服务地址",
-    mcpCopyConfig: "复制配置",
     mcpCopyEndpoint: "复制服务地址",
-    mcpClientNote:
-      "适用于支持 HTTP MCP 的客户端，例如 Codex、Claude Code、Cursor 和自建 Agent。需要分类时，传入对应的 scope，例如项目目录名。",
     transport: "传输方式",
     auth: "认证",
     noAuth: "必须使用 Bearer Key",
@@ -290,7 +294,6 @@ const ui = {
     toolsCount: "个工具",
     http: "HTTP",
     localMemory: "本地记忆 / 01",
-    clientConfig: "客户端配置",
     serverEndpoint: "服务端点",
   },
 } as const;
@@ -962,6 +965,10 @@ function McpPage({ language }: { language: Language }) {
     useState<CodexIntegration | null>(null);
   const [codexInstalling, setCodexInstalling] = useState(false);
   const [codexMessage, setCodexMessage] = useState("");
+  const [codexMcpIntegration, setCodexMcpIntegration] = useState<CodexMcpIntegration | null>(null);
+  const [codexMcpKeyId, setCodexMcpKeyId] = useState("");
+  const [codexMcpInstalling, setCodexMcpInstalling] = useState(false);
+  const [codexMcpMessage, setCodexMcpMessage] = useState("");
   const [mcpKeys, setMcpKeys] = useState<McpKey[]>([]);
   const [keyName, setKeyName] = useState("");
   const [keyTools, setKeyTools] = useState<string[]>(mcpTools.map(([name]) => name));
@@ -973,7 +980,6 @@ function McpPage({ language }: { language: Language }) {
   const [editingKeyId, setEditingKeyId] = useState<string | null>(null);
   const [editingKeyName, setEditingKeyName] = useState("");
   const [activeTab, setActiveTab] = useState<"connection" | "usage">("connection");
-  const [showEnhancementModal, setShowEnhancementModal] = useState(false);
   const host =
     typeof window !== "undefined" && window.location.hostname
       ? window.location.hostname
@@ -981,11 +987,6 @@ function McpPage({ language }: { language: Language }) {
   const pagePort = typeof window !== "undefined" ? window.location.port : "";
   const serverPort = pagePort === "5173" || !pagePort ? "8765" : pagePort;
   const endpoint = `http://${host}:${serverPort}/mcp/`;
-  const config = JSON.stringify(
-    { mcpServers: { "memory-one": { type: "http", url: endpoint, ...(useBearerKey === true ? { headers: { Authorization: "Bearer <在 Key 管理中创建>" } } : {}) } } },
-    null,
-    2,
-  );
   const callsByTool = new Map(
     stats?.tools.map((tool) => [tool.tool_name, tool.calls]) ?? [],
   );
@@ -1000,13 +1001,23 @@ function McpPage({ language }: { language: Language }) {
     fetch("/api/integrations/codex")
       .then((response) => response.json())
       .then(setCodexIntegration);
+    fetch(`/api/integrations/codex/mcp?endpoint=${encodeURIComponent(endpoint)}`)
+      .then((response) => response.json())
+      .then(setCodexMcpIntegration);
     fetch("/api/mcp/keys")
       .then((response) => response.json())
       .then(setMcpKeys);
   }, []);
-  const updateBearerKey = (enabled: boolean) => {
+  useEffect(() => {
+    const availableKeys = mcpKeys.filter((key) => key.secret);
+    if (codexMcpIntegration?.configured_key_id) setCodexMcpKeyId(codexMcpIntegration.configured_key_id);
+    else if (!availableKeys.some((key) => key.id === codexMcpKeyId)) setCodexMcpKeyId(availableKeys[0]?.id ?? "");
+  }, [codexMcpIntegration, codexMcpKeyId, mcpKeys]);
+  const updateBearerKey = async (enabled: boolean) => {
     setUseBearerKey(enabled);
-    void fetch("/api/mcp/config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ use_bearer_key: enabled }) });
+    await fetch("/api/mcp/config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ use_bearer_key: enabled }) });
+    const response = await fetch(`/api/integrations/codex/mcp?endpoint=${encodeURIComponent(endpoint)}`);
+    setCodexMcpIntegration(await response.json());
   };
   const copyText = async (value: string, key: string) => {
     try {
@@ -1035,6 +1046,24 @@ function McpPage({ language }: { language: Language }) {
       setCodexMessage("写入失败，请检查 Codex 配置目录的访问权限。");
     } finally {
       setCodexInstalling(false);
+    }
+  };
+  const installCodexMcp = async () => {
+    setCodexMcpInstalling(true);
+    setCodexMcpMessage("");
+    try {
+      const response = await fetch("/api/integrations/codex/mcp/install", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ endpoint, ...(useBearerKey === true ? { key_id: codexMcpKeyId } : {}) }),
+      });
+      if (!response.ok) throw new Error("install_failed");
+      setCodexMcpIntegration(await response.json());
+      setCodexMcpMessage("Codex MCP 配置已写入。重新启动 Codex 或开启新会话后生效。");
+    } catch {
+      setCodexMcpMessage(useBearerKey === true ? "配置失败，请检查 Codex 配置目录和 MCP Key。" : "配置失败，请检查 Codex 配置目录。");
+    } finally {
+      setCodexMcpInstalling(false);
     }
   };
   const createMcpKey = async () => {
@@ -1078,6 +1107,13 @@ function McpPage({ language }: { language: Language }) {
     codexIntegration?.status === "update_available"
       ? "更新全局指令"
       : "启用全局记忆";
+  const codexMcpConfigured = codexMcpIntegration?.status === "configured" && (useBearerKey !== true || codexMcpIntegration.configured_key_id === codexMcpKeyId);
+  const codexMcpStatus =
+    codexMcpIntegration?.status === "configured"
+      ? "已配置"
+      : codexMcpIntegration?.status === "update_available"
+        ? "需更新"
+        : "未配置";
   return (
     <div className={`mcp-page ${useBearerKey === null ? "mcp-loading" : ""}`}>
       {copyMessage ? <div className={`copy-feedback ${copyMessage.startsWith("复制失败") ? "error" : ""}`} role="status">{copyMessage.startsWith("复制失败") ? <AlertCircle size={14} /> : <Check size={14} />}{copyMessage}</div> : null}
@@ -1088,24 +1124,6 @@ function McpPage({ language }: { language: Language }) {
       </nav>
       </div>
       {activeTab === "connection" && <div className="mcp-grid" role="tabpanel">
-        <section className="mcp-panel mcp-config">
-          <div className="mcp-panel-header">
-            <div>
-              <span className="eyebrow">{copy.clientConfig}</span>
-              <h2>{copy.mcpConfig}</h2>
-            </div>
-            <div className="mcp-panel-actions">
-              <button className="mcp-codex-button" onClick={() => setShowEnhancementModal(true)} title="打开 Agent 增强"><FileCog size={14} />Agent 增强</button><button className="icon-button" onClick={() => copyText(config, "config")} title={copy.mcpCopyConfig}>{copied === "config" ? <Check size={16} /> : <Copy size={16} />}</button>
-            </div>
-          </div>
-          <pre>
-            <code>{config}</code>
-          </pre>
-          <div className="mcp-note">
-            <Server size={15} />
-            <span>{copy.mcpClientNote}</span>
-          </div>
-        </section>
         <section className="mcp-panel mcp-endpoint">
           <div className="mcp-panel-header">
             <div>
@@ -1137,6 +1155,37 @@ function McpPage({ language }: { language: Language }) {
           </div>
           <div className="endpoint-tools"><span className="key-tools-label">支持的工具</span><div className="tool-chip-list">{mcpTools.map(([name]) => <span className="tool-chip" key={name}>{name}</span>)}</div></div>
         </section>
+        <section className="mcp-panel codex-mcp-panel">
+          <div className="mcp-panel-header">
+            <div>
+              <span className="eyebrow">Codex</span>
+              <h2>连接与增强</h2>
+            </div>
+            <span className={`integration-status status-${codexMcpIntegration?.status ?? "loading"}`}>{codexMcpIntegration ? codexMcpStatus : "检测中"}</span>
+          </div>
+          <p className="codex-mcp-description">{codexMcpIntegration?.detected ? "已检测到 Codex 配置文件。" : "尚未发现 Codex 配置文件，配置时将自动创建。"}{useBearerKey === true ? "选择 MCP Key 后，可以自动写入 Memory One 连接。" : useBearerKey === false ? "当前已关闭认证，将直接写入无需 Key 的 Memory One 连接。" : "正在读取 MCP 认证状态。"}</p>
+          <code className="integration-path">{codexMcpIntegration?.path ?? "正在检测 Codex 配置..."}</code>
+          <div className="codex-mcp-controls">
+            {useBearerKey === true ? <label className="config-field">
+              <span>MCP Key</span>
+              <select value={codexMcpKeyId} onChange={(event) => setCodexMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
+                {mcpKeys.filter((key) => key.secret).map((key) => <option key={key.id} value={key.id}>{key.name} · {key.prefix}••••</option>)}
+                {!mcpKeys.some((key) => key.secret) ? <option value="">请先创建 MCP Key</option> : null}
+              </select>
+            </label> : <div className="codex-no-auth"><span>认证方式</span><strong>{useBearerKey === false ? "无需 Key" : "读取中"}</strong></div>}
+            <button className="primary-button" disabled={useBearerKey === null || !codexMcpIntegration || (useBearerKey === true && !codexMcpKeyId) || codexMcpInstalling || codexMcpConfigured} onClick={() => void installCodexMcp()}>
+              {codexMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}
+              {codexMcpConfigured ? "已配置" : codexMcpIntegration?.status === "not_configured" ? "配置 Codex" : "更新配置"}
+            </button>
+          </div>
+          {codexMcpMessage ? <div className="integration-message" role="status">{codexMcpMessage}</div> : null}
+          <p className="codex-mcp-note">配置时会保留 Codex 的其他设置，只替换名为 <code>memory-one</code> 的 MCP 服务配置。</p>
+          <section className="codex-integration codex-mcp-enhancement">
+            <div className="codex-integration-icon"><FileCog size={19} /></div>
+            <div className="codex-integration-copy"><div className="codex-title-row"><div><span className="eyebrow">Codex 增强</span><h2>全局任务前置记忆</h2></div><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div><p>将 Memory One 管理的全局指令写入 Codex，让每项任务开始前主动检索相关经验。</p><code className="integration-path">{codexIntegration?.path ?? "正在读取配置路径..."}</code>{codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}</div>
+            <button className="primary-button codex-action" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
+          </section>
+        </section>
         {useBearerKey === true && <section className="mcp-keys" role="region" aria-label="Key 管理">
           <div className="mcp-tools-heading"><div><span className="eyebrow">访问控制</span><h2>MCP Key 管理</h2></div><KeyRound size={18} /></div>
           <p className="mcp-key-note">为平台 Agent、Codex 或其他 MCP 客户端创建独立 Key，并按最小权限限制它可以调用的工具。</p>
@@ -1151,15 +1200,6 @@ function McpPage({ language }: { language: Language }) {
         <div className="mcp-key-tools"><span className="key-tools-label">允许调用的工具</span><div className="key-tools-grid">{mcpTools.map(([name]) => <label key={name}><input type="checkbox" checked={keyTools.includes(name)} onChange={(event) => setKeyTools((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div></div>
         <div className="modal-actions"><button className="ghost-button" onClick={() => setShowKeyForm(false)}>取消</button><button className="primary-button" onClick={() => { void createMcpKey(); setShowKeyForm(false); }} disabled={keyBusy || keyTools.length === 0}>{keyBusy ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}创建 Key</button></div>
         {keyMessage ? <p className="integration-message" role="alert">{keyMessage}</p> : null}
-      </section></div>}
-      {showEnhancementModal && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowEnhancementModal(false); }}><section className="enhancement-modal" role="dialog" aria-modal="true" aria-label="Agent 增强">
-        <div className="composer-header"><div><span className="eyebrow">客户端增强</span><h2>Agent 增强</h2></div><button className="icon-button" onClick={() => setShowEnhancementModal(false)} title="关闭"><X size={18} /></button></div>
-        <p className="mcp-key-note">为开发 Agent 写入全局指令，让任务开始前主动读取 Memory One 中的相关记忆。</p>
-        <section className="codex-integration enhancement-panel">
-          <div className="codex-integration-icon"><FileCog size={19} /></div>
-          <div className="codex-integration-copy"><div className="codex-title-row"><div><span className="eyebrow">Codex</span><h2>全局任务前置记忆</h2></div><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div><p>将 Memory One 管理的全局指令写入 Codex 配置，让每项任务开始前检索相关经验。</p><code className="integration-path">{codexIntegration?.path ?? "正在读取配置路径..."}</code>{codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}</div>
-          <button className="primary-button codex-action" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
-        </section>
       </section></div>}
       {activeTab === "usage" && <>
       <section className="mcp-usage" role="tabpanel">

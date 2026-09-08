@@ -182,6 +182,7 @@ async function runAgent(request: AgentChatRequest, emit: (event: AgentEvent) => 
   } finally { await transport.close().catch(() => undefined); }
 }
 const codexAgentsPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "AGENTS.md");
+const codexConfigPath = join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml");
 const codexGuidanceStart = "<!-- memory-one:codex:start -->";
 const codexGuidanceEnd = "<!-- memory-one:codex:end -->";
 const codexGuidance = `${codexGuidanceStart}
@@ -229,6 +230,83 @@ async function installCodexIntegration() {
   await mkdir(dirname(codexAgentsPath), { recursive: true });
   await writeFile(codexAgentsPath, `${preserved ? `${preserved}\n\n` : ""}${codexGuidance}\n`, "utf8");
   return getCodexIntegration();
+}
+
+async function readCodexConfig() {
+  try {
+    return await readFile(codexConfigPath, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+function isMemoryOneCodexSection(name: string) {
+  const normalized = name.replace(/"memory-one"/g, "memory-one");
+  return normalized === "mcp_servers.memory-one" || normalized.startsWith("mcp_servers.memory-one.");
+}
+
+function getMemoryOneCodexSections(content: string) {
+  const sections: string[] = [];
+  let current: string[] | null = null;
+  for (const line of content.split("\n")) {
+    const section = line.match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+    if (section) {
+      if (current) sections.push(current.join("\n"));
+      current = isMemoryOneCodexSection(section[1].trim()) ? [line] : null;
+    } else if (current) current.push(line);
+  }
+  if (current) sections.push(current.join("\n"));
+  return sections.join("\n");
+}
+
+function removeMemoryOneCodexSections(content: string) {
+  const lines: string[] = [];
+  let removing = false;
+  for (const line of content.split("\n")) {
+    const section = line.match(/^\s*\[([^\]]+)]\s*(?:#.*)?$/);
+    if (section) removing = isMemoryOneCodexSection(section[1].trim());
+    if (!removing) lines.push(line);
+  }
+  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
+}
+
+function readTomlString(source: string, key: string) {
+  const match = source.match(new RegExp(`(?:^|[,{]\\s*)${key}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'[^']*')`, "im"));
+  if (!match) return null;
+  if (match[1].startsWith("'")) return match[1].slice(1, -1);
+  try { return JSON.parse(match[1]) as string; } catch { return null; }
+}
+
+async function getCodexMcpIntegration(expectedEndpoint: string) {
+  const content = await readCodexConfig();
+  const sections = getMemoryOneCodexSections(content);
+  const endpoint = readTomlString(sections, "url");
+  const authorization = readTomlString(sections, "Authorization");
+  const key = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  const keyRecord = key ? store.verifyMcpKey(key) : null;
+  const authRequired = store.getMcpConfig().use_bearer_key;
+  const configured = endpoint === expectedEndpoint && (authRequired ? Boolean(keyRecord) : !authorization);
+  return {
+    path: codexConfigPath,
+    detected: Boolean(content),
+    endpoint,
+    auth_required: authRequired,
+    configured_key_id: keyRecord?.id ?? null,
+    status: configured ? "configured" : sections ? "update_available" : "not_configured",
+  };
+}
+
+async function installCodexMcpIntegration(endpoint: string, keyId?: string) {
+  const authRequired = store.getMcpConfig().use_bearer_key;
+  const key = authRequired && keyId ? store.getMcpKey(keyId) : null;
+  if (authRequired && (!key?.secret || key.revoked_at)) throw new Error("mcp_key_not_found");
+  const content = await readCodexConfig();
+  const preserved = removeMemoryOneCodexSections(content);
+  const section = `[mcp_servers.memory-one]\nurl = ${JSON.stringify(endpoint)}${authRequired ? `\nhttp_headers = { Authorization = ${JSON.stringify(`Bearer ${key!.secret}`)} }` : ""}`;
+  await mkdir(dirname(codexConfigPath), { recursive: true });
+  await writeFile(codexConfigPath, `${preserved ? `${preserved}\n\n` : ""}${section}\n`, "utf8");
+  return getCodexMcpIntegration(endpoint);
 }
 
 async function trackToolCall<T>(toolName: string, action: () => T | Promise<T>): Promise<T> {
@@ -385,6 +463,20 @@ app.post("/api/agent/stream", async (request, reply) => {
 */
 app.get("/api/integrations/codex", async () => getCodexIntegration());
 app.post("/api/integrations/codex/install", async () => installCodexIntegration());
+app.get("/api/integrations/codex/mcp", async (request) => {
+  const { endpoint = "" } = request.query as { endpoint?: string };
+  return getCodexMcpIntegration(endpoint);
+});
+app.post("/api/integrations/codex/mcp/install", async (request, reply) => {
+  const body = (request.body as { endpoint?: string; key_id?: string } | undefined) ?? {};
+  if (!body.endpoint) return reply.code(422).send({ detail: "codex_mcp_config_required" });
+  try {
+    return await installCodexMcpIntegration(body.endpoint, body.key_id);
+  } catch (error) {
+    if (error instanceof Error && error.message === "mcp_key_not_found") return reply.code(404).send({ detail: error.message });
+    throw error;
+  }
+});
 app.get("/api/memories/:id", async (request, reply) => { const { id } = request.params as { id: string }; const item = store.get(id); return item ? item : reply.code(404).send({ detail: "memory_not_found" }); });
 app.post("/api/memories", async (request, reply) => { const payload = request.body as MemoryInput; if (!payload?.content) return reply.code(422).send({ detail: "content_required" }); return store.create(payload); });
 app.patch("/api/memories/:id", async (request, reply) => { const { id } = request.params as { id: string }; const item = store.update(id, request.body as Partial<MemoryInput>); return item ? item : reply.code(404).send({ detail: "memory_not_found" }); });
@@ -393,10 +485,11 @@ app.delete("/api/memories/:id", async (request) => { const { id } = request.para
 app.all("/mcp", async (request, reply) => reply.redirect("/mcp/", 307));
 app.all("/mcp/", async (request, reply) => {
   const internal = request.headers["x-memory-one-internal"] === internalMcpToken;
+  const authRequired = store.getMcpConfig().use_bearer_key;
   const authorization = request.headers.authorization;
   const secret = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-  const key = secret ? store.verifyMcpKey(secret) : null;
-  if (!internal && (!secret || !key)) return reply.code(401).header("www-authenticate", "Bearer").send({ error: secret ? "invalid_mcp_key" : "mcp_key_required" });
+  const key = authRequired && secret ? store.verifyMcpKey(secret) : null;
+  if (!internal && authRequired && (!secret || !key)) return reply.code(401).header("www-authenticate", "Bearer").send({ error: secret ? "invalid_mcp_key" : "mcp_key_required" });
   const allowedTools = key && key.allowed_tools.length ? new Set(key.allowed_tools) : undefined;
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   const mcp = createMcpServer(allowedTools);
