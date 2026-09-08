@@ -1,6 +1,6 @@
 {
   "name": "@ccjr1120/memory-one",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A local HTTP MCP service for personal agent memory",
   "type": "module",
   "bin": {
