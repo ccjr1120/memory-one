@@ -24,7 +24,7 @@ Use a frontend framework for the web UI rather than plain HTML/JavaScript. Visua
 
 The current frontend release uses Chinese UI copy. User-authored memory content is displayed as entered.
 
-Keep the MCP service endpoint card compact. The Codex card should show only the necessary connection and task-memory status/actions; omit redundant headings, authentication-state labels such as “无需 Key”, configuration paths, and implementation explanations.
+Keep the MCP service endpoint card compact. The Codex card should retain the small “Codex” eyebrow label and show only the necessary connection and task-memory status/actions; omit the redundant “Codex 配置” heading, authentication-state labels such as “无需 Key”, configuration paths, and implementation explanations.
 
 ## Development Command
 

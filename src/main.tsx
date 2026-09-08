@@ -1145,6 +1145,7 @@ function McpPage({ language }: { language: Language }) {
           </div>
         </section>
         <section className="mcp-panel codex-mcp-panel">
+          <span className="eyebrow codex-compact-heading">Codex</span>
           <div className="codex-compact-list">
             <section className="codex-compact-row">
               <div className="codex-compact-copy">
