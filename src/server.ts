@@ -28,7 +28,7 @@ type AgentChatRequest = { message?: string; history?: Array<{ role: "user" | "as
 type AgentEvent = { type: "delta"; text: string } | { type: "tool"; tool: AgentToolCall } | { type: "done"; toolCalls: AgentToolCall[] };
 type ProviderMessage = Record<string, unknown>;
 
-const agentSystemPrompt = "你是 Memory One 的记忆管家。你通过 MCP 工具管理用户的长期记忆，支持记忆的搜索、读取、保存、更新、删除和反馈。请先理解用户意图，涉及记忆事实时优先调用工具，不要编造记忆。删除前必须确认目标唯一；回复使用中文，简洁但可以使用 Markdown。";
+const agentSystemPrompt = "你是 Memory One 的记忆管家。你通过 MCP 工具管理用户的长期记忆，支持记忆的搜索、读取、保存、更新、删除和反馈。请先理解用户意图，涉及记忆事实时优先调用工具，不要编造记忆。每轮都检查用户是否表达了纠正、偏好、决定、项目约定、个人事实或其他未来有用的信息：有则在最终回复前主动调用 memory_store；如果是在修正已有记忆，先读取并调用 memory_update。只有明显临时、一次性的内容才不保存。删除前必须确认目标唯一；回复使用中文，简洁但可以使用 Markdown。";
 const toolLabels: Record<string, string> = { memory_get_context: "读取相关上下文", memory_search: "搜索记忆", memory_get: "读取记忆", memory_list: "列出记忆", memory_store: "保存记忆", memory_update: "更新记忆", memory_delete: "删除记忆", memory_feedback: "记录反馈" };
 const isMemoryOverviewRequest = (message: string) => /(?:有哪些|所有记忆|全部记忆|列出(?:全部)?|查看(?:全部)?|浏览全部|总结(?:下)?(?:我的)?记忆|总结我的特点|概括我的特点|我的画像|我的偏好和特点|我的记忆(?:有什么)?特点|记忆特点)/.test(message);
 
@@ -191,6 +191,7 @@ Before starting any user task, call the Memory One MCP tool \`memory_get_context
 - Use a concise summary of the current task as the query.
 - Omit \`scope\` unless a useful category is known.
 - Apply relevant preferences, decisions, corrections, and lessons before planning, answering, editing files, or calling task-specific tools.
+- After the user expresses a correction, preference, decision, project convention, personal fact, or other durable information, proactively save it with \`memory_store\` (or update the matching memory with \`memory_update\`) before finishing the task. Do not save clearly transient, one-off details.
 - Do not skip retrieval merely because the task appears self-contained.
 ${codexGuidanceEnd}`;
 
@@ -245,7 +246,7 @@ const mcpToolNames = ["memory_store", "memory_search", "memory_get_context", "me
 
 function createMcpServer(allowedTools?: Set<string>) {
   const mcp = new McpServer({ name: "memory-one", version: "0.1.0" }, {
-    instructions: "Memory One provides durable experience for every task. At the start of each user task, call memory_get_context before planning, answering, editing, or using task-specific tools. Query with a concise summary of the current task and apply relevant retrieved memories. Use memory_search for focused follow-up retrieval. Proactively save durable preferences, decisions, project conventions, personal facts, and corrections with memory_store. Use memory_update when stored information is corrected or superseded. Use memory_feedback after retrieved memories prove useful or unhelpful. Only use memory_delete when the user explicitly asks to forget a specific memory. Scope is optional."
+    instructions: "Memory One provides durable experience for every task. At the start of each user task, call memory_get_context before planning, answering, editing, or using task-specific tools. Query with a concise summary of the current task and apply relevant retrieved memories. After the user expresses a correction, preference, decision, project convention, personal fact, or other durable information, proactively save it with memory_store before finishing the task; use memory_update when correcting an existing memory. Do not save clearly transient, one-off details. Use memory_search for focused follow-up retrieval. Use memory_feedback after retrieved memories prove useful or unhelpful. Only use memory_delete when the user explicitly asks to forget a specific memory. Scope is optional."
   });
   const registerTool = (name: string, description: string, schema: Record<string, z.ZodTypeAny>, handler: (input: any) => any) => {
     if (!allowedTools || allowedTools.has(name)) mcp.tool(name, description, schema, handler);
@@ -307,27 +308,8 @@ app.delete("/api/mcp/keys/:id", async (request, reply) => {
   const { id } = request.params as { id: string };
   return { revoked: store.revokeMcpKey(id) };
 });
-app.get("/api/agent/config", async () => store.getAgentConfig());
-app.put("/api/agent/config", async (request, reply) => {
-  const body = (request.body as Partial<AgentConfig> | undefined) ?? {};
-  return reply.send(store.saveAgentConfig(body));
-});
-app.get("/api/agent/messages", async () => store.listAgentMessages());
-app.post("/api/agent/messages", async (request, reply) => {
-  const body = request.body as { id?: string; role?: "user" | "assistant"; content?: string; toolCalls?: unknown[] } | undefined;
-  if (!body?.id || !body.role || typeof body.content !== "string") return reply.code(422).send({ detail: "message_required" });
-  return store.saveAgentMessage({ id: body.id, role: body.role, content: body.content, toolCalls: body.toolCalls });
-});
-app.post("/api/agent/chat", async (request, reply) => {
-  try {
-    let text = ""; const toolCalls: AgentToolCall[] = [];
-    await runAgent((request.body as AgentChatRequest | undefined) ?? {}, (event) => { if (event.type === "delta") text += event.text; if (event.type === "done") toolCalls.push(...event.toolCalls); });
-    return { reply: text, toolCalls };
-  } catch (error) {
-    request.log.error(error);
-    return reply.code(500).send({ detail: error instanceof Error ? error.message : "agent_request_failed" });
-  }
-});
+/* Agent API removed. */
+/*
 app.post("/api/agent/models", async (request, reply) => {
   const body = (request.body as { provider?: string; base_url?: string | null; api_key?: string | null } | undefined) ?? {};
   const provider = (body.provider || "").toLowerCase();
@@ -355,6 +337,8 @@ app.post("/api/agent/models", async (request, reply) => {
     return reply.code(502).send({ detail: "model_list_unreachable" });
   }
 });
+*/
+/*
 app.post("/api/agent/stream", async (request, reply) => {
   const body = ((request.body as AgentChatRequest | undefined) ?? {});
   const userMessageId = body.user_message_id;
@@ -385,6 +369,7 @@ app.post("/api/agent/stream", async (request, reply) => {
     reply.raw.write(sseEvent("error", { detail: error instanceof Error ? error.message : "agent_request_failed" }));
   } finally { reply.raw.end(); }
 });
+*/
 app.get("/api/integrations/codex", async () => getCodexIntegration());
 app.post("/api/integrations/codex/install", async () => installCodexIntegration());
 app.get("/api/memories/:id", async (request, reply) => { const { id } = request.params as { id: string }; const item = store.get(id); return item ? item : reply.code(404).send({ detail: "memory_not_found" }); });

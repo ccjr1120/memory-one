@@ -756,7 +756,6 @@ function App() {
           language={language}
         />
       )}
-      <AgentChat onMemoryChanged={() => void load("")} />
       <Outlet />
     </div>
   );
