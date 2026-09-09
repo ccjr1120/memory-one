@@ -358,7 +358,7 @@ const packageJsonPath = join(fileURLToPath(new URL(".", import.meta.url)), "../p
 const packageVersion = JSON.parse(readFileSync(packageJsonPath, "utf8")).version as string;
 app.register(fastifyStatic, { root: publicDir, prefix: "/" });
 
-for (const frontendRoute of ["/", "/timeline", "/archive", "/preferences", "/scopes", "/tags", "/settings", "/mcp-service"]) {
+for (const frontendRoute of ["/", "/timeline", "/preferences", "/scopes", "/tags", "/settings", "/mcp-service"]) {
   app.get(frontendRoute, async (_, reply) => reply.sendFile("index.html"));
 }
 app.get("/api/memories", async (request) => { const q = request.query as { scope?: string; project?: string; limit?: string }; return store.list(q.scope ?? "user", q.project ?? null, Number(q.limit ?? 50)); });

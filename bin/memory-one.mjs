@@ -37,7 +37,8 @@ const messages = {
     cancelled: "已取消。",
     notRunning: "Memory One 未运行。",
     stopped: "Memory One 已停止。",
-    updateFailed: "Memory One 更新失败。",
+    updateFailed: "Memory One 更新失败，已保留当前版本。",
+    updateWaiting: (version) => `新版本 ${version} 尚未在 npm 全部同步，请稍后重试。`,
     updated: "Memory One 已更新。",
     status: (pid, value) => `Memory One 正在运行（PID ${pid}）：${value}`,
     opening: "正在打开 Memory One。",
@@ -54,7 +55,8 @@ const messages = {
     cancelled: "Cancelled.",
     notRunning: "Memory One is not running.",
     stopped: "Memory One stopped.",
-    updateFailed: "Memory One update failed.",
+    updateFailed: "Memory One update failed; the current version was preserved.",
+    updateWaiting: (version) => `Version ${version} is not fully available from npm yet. Try again later.`,
     updated: "Memory One updated.",
     status: (pid, value) => `Memory One is running (PID ${pid}): ${value}`,
     opening: "Opening Memory One.",
@@ -189,16 +191,23 @@ async function stop() {
 }
 
 async function update() {
-  const wasRunning = Boolean(currentPid());
-  if (wasRunning) await stop();
   const npmCommand = platform() === "win32" ? "npm.cmd" : "npm";
-  const result = spawnSync(npmCommand, ["install", "--global", "@ccjr1120/memory-one@latest"], { stdio: "inherit" });
-  if (result.status !== 0) {
-    if (wasRunning) await start();
-    throw new Error(copy().updateFailed);
+  const versionResult = spawnSync(npmCommand, ["view", "@ccjr1120/memory-one@latest", "version", "--json"], { encoding: "utf8" });
+  if (versionResult.status !== 0) throw new Error(copy().updateFailed);
+  let latestVersion = "";
+  try { latestVersion = String(JSON.parse(versionResult.stdout || '""')).trim(); } catch {}
+  if (!latestVersion) throw new Error(copy().updateFailed);
+  const packageResult = spawnSync(npmCommand, ["view", `@ccjr1120/memory-one@${latestVersion}`, "dist.tarball", "--json"], { encoding: "utf8" });
+  if (packageResult.status !== 0 || !String(packageResult.stdout).trim()) throw new Error(copy().updateWaiting(latestVersion));
+
+  const wasRunning = Boolean(currentPid());
+  const result = spawnSync(npmCommand, ["install", "--global", `@ccjr1120/memory-one@${latestVersion}`], { stdio: "inherit" });
+  if (result.status !== 0) throw new Error(copy().updateFailed);
+  if (wasRunning) {
+    await stop();
+    await start();
   }
   console.log(copy().updated);
-  if (wasRunning) await start();
 }
 
 function status() {

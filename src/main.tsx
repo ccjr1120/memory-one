@@ -111,7 +111,6 @@ const kindLabels: Record<Language, Record<string, string>> = {
 type View =
   | "all"
   | "timeline"
-  | "archive"
   | "preferences"
   | "projects"
   | "tags"
@@ -121,7 +120,6 @@ const viewCopy: Record<Language, Record<View, { title: string; description: stri
   zh: {
     all: { title: "全部记忆", description: "保存 Agent 需要记住的事实、偏好和经验。" },
     timeline: { title: "时间线", description: "按发生和写入时间回看记忆。" },
-    archive: { title: "归档", description: "被归档的记忆会集中显示在这里。" },
     preferences: { title: "偏好与习惯", description: "查看 Agent 需要遵循的个人偏好和习惯。" },
     projects: { title: "Scope 分类", description: "按 scope 分类查看记忆。" },
     tags: { title: "标签", description: "按标签查看记忆。" },
@@ -131,7 +129,6 @@ const viewCopy: Record<Language, Record<View, { title: string; description: stri
   en: {
     all: { title: "All memories", description: "Facts, preferences, and experience for your agents to remember." },
     timeline: { title: "Timeline", description: "Review memories by when they happened or were saved." },
-    archive: { title: "Archive", description: "Archived memories appear here." },
     preferences: { title: "Preferences", description: "Review preferences your agents should follow." },
     projects: { title: "Scopes", description: "Browse memories by scope." },
     tags: { title: "Tags", description: "Browse memories by tag." },
@@ -142,7 +139,6 @@ const viewCopy: Record<Language, Record<View, { title: string; description: stri
 const viewRoutes = {
   all: "/",
   timeline: "/timeline",
-  archive: "/archive",
   preferences: "/preferences",
   projects: "/scopes",
   tags: "/tags",
@@ -166,11 +162,6 @@ const routeTree = rootRoute.addChildren([
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/timeline",
-    component: EmptyRoute,
-  }),
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/archive",
     component: EmptyRoute,
   }),
   createRoute({
@@ -214,7 +205,6 @@ const ui = {
     connect: "连接",
     navAll: "全部记忆",
     navTimeline: "时间线",
-    navArchive: "归档",
     navPreferences: "偏好与习惯",
     navScopes: "Scope 分类",
     navTags: "标签",
@@ -242,7 +232,6 @@ const ui = {
     emptyHelp: "试试换一个关键词，或创建一条新的记忆。",
     loadFailed: "记忆读取失败",
     retry: "重试",
-    noArchive: "暂无归档记忆",
     noTags: "暂无标签",
     settingsManaged: "设置已由本地配置管理",
     detailEyebrow: "记忆详情",
@@ -356,8 +345,8 @@ const ui = {
   },
   en: {
     brandSubtitle: "Personal memory", workspace: "Workspace", collections: "Collections", connect: "Connect",
-    navAll: "All memories", navTimeline: "Timeline", navArchive: "Archive", navPreferences: "Preferences", navScopes: "Scopes", navTags: "Tags", navMcp: "MCP service", navSettings: "Settings",
-    localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or create a memory.", loadFailed: "Could not load memories", retry: "Retry", noArchive: "No archived memories", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
+    navAll: "All memories", navTimeline: "Timeline", navPreferences: "Preferences", navScopes: "Scopes", navTags: "Tags", navMcp: "MCP service", navSettings: "Settings",
+    localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or create a memory.", loadFailed: "Could not load memories", retry: "Retry", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
     languageName: "English", languageTitle: "Interface language", languageDescription: "Choose the language used by the workspace.", languageZh: "中文", languageEn: "English", languageSaved: "Language updated", languageSaveFailed: "Could not update language. Try again.", setupTitle: "Choose a language", setupDescription: "Choose a language for the workspace. You can change it later in Settings.", continue: "Continue", savedNote: "Saved", savedCount: "Saved", openMenu: "Open menu", toggleLight: "Switch to light mode", toggleDark: "Switch to dark mode", storageNote: "Memories stay on this device.", savedMemories: "Saved", countMemories: " memories", recallTimes: " recalls",
     newMemoryEyebrow: "New memory", composerTitle: "Save a memory", content: "Memory", contentPlaceholder: "For example: The user prefers a concise interface.", type: "Type", scopeOptional: "Optional, for example: /path/to/project", sourcePlaceholder: "For example: Claude Code / Manual", writeLocal: "Save locally", preferenceRecall: "Recall mode", persistentPreference: "Persistent preference", conditionalPreference: "Conditional preference", persistentPreferenceHint: "Always returned at the start of every task", cancel: "Cancel", save: "Save memory", mcpKicker: "Agent integration", mcpTitle: "Connect your agent", mcpDescription: "Expose Memory One through Streamable HTTP. Create a scoped key and add it to your MCP client.", mcpOnline: "HTTP online", mcpEndpoint: "Service address", mcpCopyEndpoint: "Copy service address", transport: "Transport", auth: "Authentication", noAuth: "Bearer Key required", category: "Memory scope", categoryValue: "Global / optional scope", toolsLabel: "Available tools", toolsTitle: "Tools available to agents", toolsCount: "tools", http: "HTTP", localMemory: "LOCAL MEMORY / 01", serverEndpoint: "Service endpoint", versionNotice: (latest: string, current: string) => `New version ${latest}; current version ${current}`, callCount: "calls",
     appearance: "Appearance",
@@ -511,6 +500,7 @@ function App() {
   const projects = useMemo(
     () => [
       "all",
+      "__global__",
       ...new Set(
         memories.map((item) => item.project).filter(Boolean) as string[],
       ),
@@ -519,27 +509,17 @@ function App() {
   );
   const filtered = memories.filter((item) => {
     if (
-      view === "archive" ||
       view === "tags" ||
       view === "settings" ||
       view === "mcp"
     )
       return false;
     if (view === "preferences" && item.kind !== "preference") return false;
-    if (view === "projects" && !item.project) return false;
     return (
       (kind === "all" || item.kind === kind) &&
-      (project === "all" || item.project === project)
+      (project === "all" || (project === "__global__" ? !item.project : item.project === project))
     );
   });
-  const memoryGroups = useMemo(() => {
-    const groups = new Map<string, Memory[]>();
-    for (const item of filtered) {
-      const key = item.project ?? "__global__";
-      groups.set(key, [...(groups.get(key) ?? []), item]);
-    }
-    return [...groups.entries()];
-  }, [filtered]);
   const stats = {
     total: memories.length,
     projects: new Set(memories.map((item) => item.project).filter(Boolean))
@@ -618,12 +598,6 @@ function App() {
             label={copy.navTimeline}
             active={view === "timeline"}
             onClick={() => selectView("timeline")}
-          />
-          <NavItem
-            icon={<Archive size={17} />}
-            label={copy.navArchive}
-            active={view === "archive"}
-            onClick={() => selectView("archive")}
           />
         </NavSection>
         <NavSection title={copy.collections}>
@@ -788,7 +762,7 @@ function App() {
                       onValueChange={setProject}
                       options={projects.map((value) => ({
                         value,
-                        label: value === "all" ? copy.allScopes : value,
+                        label: value === "all" ? copy.allScopes : value === "__global__" ? copy.globalMemory : value,
                       }))}
                       ariaLabel={copy.scope}
                     />
@@ -804,9 +778,7 @@ function App() {
                 <span className="mono">
                   {view === "timeline"
                     ? copy.sortTimeline
-                    : view === "all" && project === "all"
-                      ? copy.sortGrouped
-                      : copy.sortRecent}
+                    : copy.sortRecent}
                 </span>
               </div>
               <section className={view === "timeline" ? "timeline-list" : "memory-list"}>
@@ -821,16 +793,10 @@ function App() {
                   <div className="empty-state">
                     <FileText size={28} />
                     <strong>
-                      {view === "archive"
-                        ? copy.noArchive
-                        : view === "tags"
-                          ? copy.noTags
-                          : copy.emptyMatch}
+                      {view === "tags" ? copy.noTags : copy.emptyMatch}
                     </strong>
                     <span>
-                      {view === "archive" || view === "tags"
-                        ? activeCopy.description
-                        : copy.emptyHelp}
+                      {view === "tags" ? activeCopy.description : copy.emptyHelp}
                     </span>
                   </div>
                 )}
@@ -842,37 +808,15 @@ function App() {
                     language={language}
                   />
                 )}
-                {!loadError && view !== "timeline" && (view === "all" && project === "all"
-                  ? memoryGroups.map(([group, items]) => (
-                      <div className="memory-group" key={group}>
-                        <div className="memory-group-header">
-                          <span>
-                            {group === "__global__" ? copy.globalMemory : group}
-                          </span>
-                          <span className="mono">
-                            {items.length.toString().padStart(2, "0")}
-                          </span>
-                        </div>
-                        {items.map((item) => (
-                          <MemoryCard
-                            key={item.id}
-                            item={item}
-                            selected={selected?.id === item.id}
-                            onClick={() => setSelected(item)}
-                            language={language}
-                          />
-                        ))}
-                      </div>
-                    ))
-                  : filtered.map((item) => (
-                      <MemoryCard
-                        key={item.id}
-                        item={item}
-                        selected={selected?.id === item.id}
-                        onClick={() => setSelected(item)}
-                        language={language}
-                      />
-                    )))}
+                {!loadError && view !== "timeline" && filtered.map((item) => (
+                  <MemoryCard
+                    key={item.id}
+                    item={item}
+                    selected={selected?.id === item.id}
+                    onClick={() => setSelected(item)}
+                    language={language}
+                  />
+                ))}
               </section>
             </>
           )}

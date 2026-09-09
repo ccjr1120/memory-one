@@ -52,6 +52,10 @@ When the user corrects agent behavior or states a durable repository-specific wo
 
 Memory One product and runtime capabilities must be implemented entirely within Memory One. Do not use `AGENTS.md` as part of preference recall, persistent preferences, or any other product behavior. `AGENTS.md` only guides agents contributing to this repository.
 
+## Scope UI
+
+Show global memories as an option in the Scope filter rather than as a trailing group in the all-memories list. The workspace does not provide a memory archive feature.
+
 ## Git Worktree Directory Rule
 
 Place additional worktrees in the parent directory of the primary checkout. Name each worktree as `../<repository-name>-<purpose>`.
@@ -75,6 +79,10 @@ The `openai` provider uses the OpenAI Responses API; `openai-compatible` uses Ch
 ## Production CLI Convention
 
 The globally installed CLI command is `memoryone` without a hyphen. When `memoryone start` finds port `23888` occupied, ask the user whether to terminate the occupying process instead of failing immediately.
+
+## npm Release Propagation
+
+After publishing a concrete version, wait until `npm view @ccjr1120/memory-one@<version> dist.tarball` succeeds before committing the bumped version that makes clients detect and announce the update.
 
 ## Interface Language and Copy
 

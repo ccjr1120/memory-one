@@ -46,6 +46,21 @@ jobs:
             npm publish --access public --provenance
           fi
 
+      - name: Wait for npm registry propagation
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          for attempt in $(seq 1 12); do
+            TARBALL="$(npm view "@ccjr1120/memory-one@${VERSION}" dist.tarball 2>/dev/null || true)"
+            if [ -n "$TARBALL" ]; then
+              echo "@ccjr1120/memory-one@${VERSION} is available: $TARBALL"
+              exit 0
+            fi
+            echo "Waiting for @ccjr1120/memory-one@${VERSION} to propagate (${attempt}/12)..."
+            sleep 10
+          done
+          echo "@ccjr1120/memory-one@${VERSION} did not propagate in time."
+          exit 1
+
       - name: Commit bumped version
         run: |
           VERSION="$(node -p "require('./package.json').version")"

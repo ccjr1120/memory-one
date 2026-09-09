@@ -381,6 +381,7 @@ export class MemoryStore {
     return result.changes > 0;
   }
 
+
   recordToolCall(toolName: string, success: boolean, durationMs: number): void {
     this.db.prepare("INSERT INTO mcp_tool_calls (tool_name, success, duration_ms, called_at) VALUES (?, ?, ?, ?)")
       .run(toolName, success ? 1 : 0, durationMs, now());
