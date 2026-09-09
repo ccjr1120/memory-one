@@ -421,6 +421,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
+  const [currentVersion, setCurrentVersion] = useState("");
   const [languageReady, setLanguageReady] = useState(false);
   const load = async (search = query) => {
     setLoading(true);
@@ -479,8 +480,9 @@ function App() {
     void fetch("/api/version")
       .then((response) => response.ok ? response.json() as Promise<{ current?: string; latest?: string | null; updateAvailable?: boolean }> : null)
       .then((version) => {
-        if (!active || !version?.updateAvailable || !version.current || !version.latest) return;
-        setVersionNotice({ current: version.current, latest: version.latest });
+        if (!active || !version?.current) return;
+        setCurrentVersion(version.current);
+        if (version.updateAvailable && version.latest) setVersionNotice({ current: version.current, latest: version.latest });
       })
       .catch(() => undefined);
     return () => {
@@ -639,6 +641,7 @@ function App() {
           <NavItem
             icon={<Settings2 size={17} />}
             label={copy.navSettings}
+            count={currentVersion ? `v${currentVersion}` : undefined}
             active={view === "settings"}
             onClick={() => selectView("settings")}
           />
@@ -882,7 +885,7 @@ function NavItem({
 }: {
   icon: React.ReactNode;
   label: string;
-  count?: number;
+  count?: number | string;
   active?: boolean;
   onClick: () => void;
 }) {
