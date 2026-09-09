@@ -70,30 +70,47 @@ if [[ -L "$DEPLOY_DIR/data" ]]; then
   rm "$DEPLOY_DIR/data"
 fi
 mkdir -p "$DEPLOY_DIR/data"
+LANGUAGE_FILE="$DEPLOY_DIR/data/language"
+if [[ ! -f "$LANGUAGE_FILE" ]]; then
+  language="zh"
+  if [[ -t 0 ]]; then
+    printf '选择界面语言 / Choose interface language\n  1. 中文\n  2. English\n请输入 1 或 2 [1]：'
+    read -r answer
+    [[ "$answer" == "2" || "$answer" == "en" || "$answer" == "EN" ]] && language="en"
+  fi
+  printf '%s\n' "$language" > "$LANGUAGE_FILE"
+fi
+export MEMORY_LANGUAGE="$(<"$LANGUAGE_FILE")"
 if [[ ! -f "$DEPLOY_DIR/data/memory.db" ]]; then
   for db_file in "$ROOT_DIR/data/memory.db" "$ROOT_DIR/data/memory.db-wal" "$ROOT_DIR/data/memory.db-shm"; do
     [[ -f "$db_file" ]] && cp -p "$db_file" "$DEPLOY_DIR/data/$(basename "$db_file")"
   done
 fi
 
-echo "Starting Memory One in the background on port $PORT..."
+if [[ "$(<"$LANGUAGE_FILE")" == "en" ]]; then
+  echo "Starting Memory One in the background on port $PORT..."
+else
+  echo "正在后台启动 Memory One（端口 $PORT）..."
+fi
 PID="$(node scripts/start-background.mjs "$DEPLOY_DIR" "$PORT" "$LOG_FILE" "$PID_FILE")"
 
 for _ in {1..30}; do
   if curl -fsS "http://127.0.0.1:$PORT/" >/dev/null 2>&1; then
-    echo "Memory One is running at http://127.0.0.1:$PORT/"
-    echo "MCP endpoint: http://127.0.0.1:$PORT/mcp/"
-    echo "Deployment directory: $DEPLOY_DIR"
-    echo "PID: $PID"
-    echo "Log: $LOG_FILE"
+    if [[ "$(<"$LANGUAGE_FILE")" == "en" ]]; then
+      echo "Memory One is running at http://127.0.0.1:$PORT/"
+      echo "MCP endpoint: http://127.0.0.1:$PORT/mcp/"
+    else
+      echo "Memory One 已启动：http://127.0.0.1:$PORT/"
+      echo "MCP 地址：http://127.0.0.1:$PORT/mcp/"
+    fi
     exit 0
   fi
   if ! kill -0 "$PID" 2>/dev/null; then
-    echo "Memory One failed to start. See $LOG_FILE" >&2
+    echo "$( [[ "$(<"$LANGUAGE_FILE")" == "en" ]] && echo "Memory One failed to start." || echo "Memory One 启动失败。" )" >&2
     exit 1
   fi
   sleep 0.2
 done
 
-echo "Memory One did not become ready. See $LOG_FILE" >&2
+echo "$( [[ "$(<"$LANGUAGE_FILE")" == "en" ]] && echo "Memory One did not become ready." || echo "Memory One 启动超时。" )" >&2
 exit 1

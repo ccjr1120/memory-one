@@ -103,14 +103,10 @@ type CodexMcpIntegration = {
 };
 type VersionNotice = { current: string; latest: string };
 const kinds = ["all", "fact", "preference", "episode", "procedure", "message"];
-type Language = "zh";
-const kindLabels: Record<string, string> = {
-  all: "全部",
-  fact: "事实",
-  preference: "偏好",
-  episode: "事件",
-  procedure: "方法",
-  message: "对话",
+type Language = "zh" | "en";
+const kindLabels: Record<Language, Record<string, string>> = {
+  zh: { all: "全部", fact: "事实", preference: "偏好", episode: "事件", procedure: "方法", message: "对话" },
+  en: { all: "All", fact: "Fact", preference: "Preference", episode: "Episode", procedure: "Procedure", message: "Message" },
 };
 type View =
   | "all"
@@ -121,27 +117,26 @@ type View =
   | "tags"
   | "settings"
   | "mcp";
-const viewCopy: Record<View, { title: string; description: string }> = {
-  all: {
-    title: "全部记忆",
-    description:
-      "一个安静、可检索的空间，保存 Agent 需要记住的事实、偏好和经验。",
+const viewCopy: Record<Language, Record<View, { title: string; description: string }>> = {
+  zh: {
+    all: { title: "全部记忆", description: "保存 Agent 需要记住的事实、偏好和经验。" },
+    timeline: { title: "时间线", description: "按发生和写入时间回看记忆。" },
+    archive: { title: "归档", description: "被归档的记忆会集中显示在这里。" },
+    preferences: { title: "偏好与习惯", description: "查看 Agent 需要遵循的个人偏好和习惯。" },
+    projects: { title: "Scope 分类", description: "按 scope 分类查看记忆。" },
+    tags: { title: "标签", description: "按标签查看记忆。" },
+    settings: { title: "设置", description: "调整界面语言和显示方式。" },
+    mcp: { title: "MCP 服务", description: "连接 Agent，管理服务访问。" },
   },
-  timeline: { title: "时间线", description: "按发生和写入时间回看你的记忆。" },
-  archive: { title: "归档", description: "被归档的记忆会集中显示在这里。" },
-  preferences: {
-    title: "偏好与习惯",
-    description: "集中查看 Agent 需要遵循的个人偏好和习惯。",
-  },
-  projects: {
-    title: "Scope 分类",
-    description: "按 scope 分类查看记忆，项目目录名只是其中一种常用值。",
-  },
-  tags: { title: "标签", description: "标签视图将在记忆拥有标签后显示内容。" },
-  settings: { title: "设置", description: "本地存储和界面设置。" },
-  mcp: {
-    title: "MCP 服务",
-    description: "把 Memory One 连接到你的 Agent，查看端点配置和可用工具。",
+  en: {
+    all: { title: "All memories", description: "Facts, preferences, and experience for your agents to remember." },
+    timeline: { title: "Timeline", description: "Review memories by when they happened or were saved." },
+    archive: { title: "Archive", description: "Archived memories appear here." },
+    preferences: { title: "Preferences", description: "Review preferences your agents should follow." },
+    projects: { title: "Scopes", description: "Browse memories by scope." },
+    tags: { title: "Tags", description: "Browse memories by tag." },
+    settings: { title: "Settings", description: "Adjust language and display settings." },
+    mcp: { title: "MCP service", description: "Connect agents and manage service access." },
   },
 };
 const viewRoutes = {
@@ -265,7 +260,7 @@ const ui = {
     recallCount: "召回次数",
     times: "次",
     original: "查看原始记录",
-    switchLanguage: "Switch to English",
+    switchLanguage: "切换到 English",
     newMemoryEyebrow: "新建记忆",
     composerTitle: "保存一条记忆",
     content: "记忆内容",
@@ -277,6 +272,26 @@ const ui = {
     cancel: "取消",
     save: "保存记忆",
     languageCode: "EN",
+    timelineItems: "条",
+    languageName: "中文",
+    languageTitle: "界面语言",
+    languageDescription: "选择工作台使用的语言。",
+    languageZh: "中文",
+    languageEn: "English",
+    languageSaved: "语言已更新",
+    languageSaveFailed: "语言更新失败，请稍后重试。",
+    setupTitle: "选择语言",
+    setupDescription: "选择工作台使用的语言，之后可在设置中修改。",
+    continue: "继续",
+    savedNote: "已保存",
+    savedCount: "已保存",
+    openMenu: "打开菜单",
+    toggleLight: "切换浅色模式",
+    toggleDark: "切换深色模式",
+    storageNote: "记忆仅保存在当前设备。",
+    savedMemories: "已保存",
+    countMemories: "条记忆",
+    recallTimes: "次召回",
     mcpKicker: "Agent 集成",
     mcpTitle: "连接你的 Agent",
     mcpDescription:
@@ -295,6 +310,89 @@ const ui = {
     http: "HTTP",
     localMemory: "本地记忆 / 01",
     serverEndpoint: "服务端点",
+    versionNotice: (latest: string, current: string) => `发现新版本 ${latest}，当前版本 ${current}`,
+    callCount: "次",
+    appearance: "界面显示",
+    appearanceEyebrow: "界面显示",
+    darkMode: "深色模式",
+    darkModeDescription: "在浅色和深色界面之间切换。",
+    storageEyebrow: "本地存储",
+    agentName: "记忆管家",
+    agentDescription: "通过 MCP 管理你的记忆",
+    collapse: "收起",
+    agentPage: "Agent 页面",
+    chat: "对话",
+    configuration: "配置",
+    processing: "正在处理",
+    readingMemory: "正在读取记忆并生成回复",
+    agentPlaceholder: "告诉记忆管家你想做什么...",
+    send: "发送",
+    requestFormat: "请求格式",
+    chooseRequestFormat: "选择请求格式",
+    model: "模型",
+    chooseOrEnterModel: "选择或输入模型",
+    fetchModels: "获取列表",
+    saving: "保存中",
+    saved: "已保存",
+    saveConfiguration: "保存配置",
+    configSaveFailed: "配置保存失败，请稍后重试。",
+    missingBaseUrl: "请先填写 Base URL。",
+    missingApiKey: "请先完成 Agent 配置。",
+    providerRequestFailed: "模型供应商请求失败，请检查供应商、模型和 Base URL。",
+    agentRequestFailed: "暂时无法连接记忆管家，请稍后再试。",
+    fetchedModels: (count: number) => `已获取 ${count} 个模型`,
+    noModels: "没有可用模型",
+    modelListFailed: "模型列表获取失败，请检查配置。",
+    welcome: "你好，我是记忆管家。可以帮你搜索、保存、修改、删除记忆，也可以总结你的偏好和特点。",
+    suggestionTraits: "总结我的特点",
+    suggestionProjects: "搜索最近的项目约定",
+    suggestionConcise: "记住我喜欢简洁的界面",
+    openAgent: "打开记忆管家",
+    agentTabs: "Agent 页面",
+  },
+  en: {
+    brandSubtitle: "Personal memory", workspace: "Workspace", collections: "Collections", connect: "Connect",
+    navAll: "All memories", navTimeline: "Timeline", navArchive: "Archive", navPreferences: "Preferences", navScopes: "Scopes", navTags: "Tags", navMcp: "MCP service", navSettings: "Settings",
+    localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or create a memory.", loadFailed: "Could not load memories", retry: "Retry", noArchive: "No archived memories", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
+    languageName: "English", languageTitle: "Interface language", languageDescription: "Choose the language used by the workspace.", languageZh: "中文", languageEn: "English", languageSaved: "Language updated", languageSaveFailed: "Could not update language. Try again.", setupTitle: "Choose a language", setupDescription: "Choose a language for the workspace. You can change it later in Settings.", continue: "Continue", savedNote: "Saved", savedCount: "Saved", openMenu: "Open menu", toggleLight: "Switch to light mode", toggleDark: "Switch to dark mode", storageNote: "Memories stay on this device.", savedMemories: "Saved", countMemories: " memories", recallTimes: " recalls",
+    newMemoryEyebrow: "New memory", composerTitle: "Save a memory", content: "Memory", contentPlaceholder: "For example: The user prefers a concise interface.", type: "Type", scopeOptional: "Optional, for example: /path/to/project", sourcePlaceholder: "For example: Claude Code / Manual", writeLocal: "Save locally", cancel: "Cancel", save: "Save memory", mcpKicker: "Agent integration", mcpTitle: "Connect your agent", mcpDescription: "Expose Memory One through Streamable HTTP. Create a scoped key and add it to your MCP client.", mcpOnline: "HTTP online", mcpEndpoint: "Service address", mcpCopyEndpoint: "Copy service address", transport: "Transport", auth: "Authentication", noAuth: "Bearer Key required", category: "Memory scope", categoryValue: "Global / optional scope", toolsLabel: "Available tools", toolsTitle: "Tools available to agents", toolsCount: "tools", http: "HTTP", localMemory: "LOCAL MEMORY / 01", serverEndpoint: "Service endpoint", versionNotice: (latest: string, current: string) => `New version ${latest}; current version ${current}`, callCount: "calls",
+    appearance: "Appearance",
+    appearanceEyebrow: "APPEARANCE",
+    darkMode: "Dark mode",
+    darkModeDescription: "Switch between light and dark themes.",
+    storageEyebrow: "STORAGE",
+    agentName: "Memory assistant",
+    agentDescription: "Manage your memories through MCP",
+    collapse: "Collapse",
+    agentPage: "Agent page",
+    chat: "Chat",
+    configuration: "Configuration",
+    processing: "Processing",
+    readingMemory: "Reading memories and preparing a reply",
+    agentPlaceholder: "Tell the memory assistant what to do...",
+    send: "Send",
+    requestFormat: "Request format",
+    chooseRequestFormat: "Choose a request format",
+    model: "Model",
+    chooseOrEnterModel: "Choose or enter a model",
+    fetchModels: "Fetch models",
+    saving: "Saving",
+    saved: "Saved",
+    saveConfiguration: "Save configuration",
+    configSaveFailed: "Could not save the configuration. Try again.",
+    missingBaseUrl: "Enter a Base URL first.",
+    missingApiKey: "Complete the agent configuration first.",
+    providerRequestFailed: "The model provider request failed. Check the provider, model, and Base URL.",
+    agentRequestFailed: "Could not connect to the memory assistant. Try again.",
+    fetchedModels: (count: number) => `${count} models found`,
+    noModels: "No models available",
+    modelListFailed: "Could not fetch models. Check the configuration.",
+    welcome: "Hi, I’m the memory assistant. I can search, save, update, and delete memories, or summarize your preferences.",
+    suggestionTraits: "Summarize my preferences",
+    suggestionProjects: "Search recent project conventions",
+    suggestionConcise: "Remember that I prefer concise interfaces",
+    openAgent: "Open memory assistant",
+    agentTabs: "Agent page",
   },
 } as const;
 const formatDate = (value: string | null | undefined, language: Language) =>
@@ -320,7 +418,8 @@ function App() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [project, setProject] = useState("all");
-  const language: Language = "zh";
+  const [language, setLanguage] = useState<Language>("zh");
+  const [languageSetup, setLanguageSetup] = useState(false);
   const [dark, setDark] = useState(
     () => localStorage.getItem("memory-one-theme") === "dark",
   );
@@ -329,6 +428,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
+  const [languageReady, setLanguageReady] = useState(false);
   const load = async (search = query) => {
     setLoading(true);
     setLoadError(false);
@@ -346,7 +446,26 @@ function App() {
     }
   };
   const copy = ui[language];
-  const labels = kindLabels;
+  const labels = kindLabels[language];
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/app-config")
+      .then((response) => response.ok ? response.json() as Promise<{ language?: Language | null }> : null)
+      .then((config) => {
+        if (!active) return;
+        if (config?.language === "zh" || config?.language === "en") setLanguage(config.language);
+        else setLanguageSetup(true);
+        setLanguageReady(true);
+      })
+      .catch(() => { if (active) setLanguageReady(true); });
+    return () => { active = false; };
+  }, []);
+  const saveLanguage = async (next: Language) => {
+    const response = await fetch("/api/app-config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ language: next }) });
+    if (!response.ok) throw new Error("language_save_failed");
+    setLanguage(next);
+    setLanguageSetup(false);
+  };
   useEffect(() => {
     setSelected(null);
     setMobileNav(false);
@@ -360,8 +479,8 @@ function App() {
     localStorage.setItem("memory-one-theme", dark ? "dark" : "light");
   }, [dark]);
   useEffect(() => {
-    document.documentElement.lang = "zh-CN";
-  }, []);
+    document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
+  }, [language]);
   useEffect(() => {
     let active = true;
     let timer: number | undefined;
@@ -426,7 +545,7 @@ function App() {
       .size,
     preferences: memories.filter((item) => item.kind === "preference").length,
   };
-  const activeCopy = viewCopy[view];
+  const activeCopy = viewCopy[language][view];
   const selectView = (nextView: View) => {
     void navigate({ to: viewRoutes[nextView] });
   };
@@ -455,7 +574,7 @@ function App() {
       {versionNotice && (
         <div className="version-notice" role="status">
           <Sparkles size={14} />
-          <span>发现新版本 {versionNotice.latest}，当前版本 {versionNotice.current}</span>
+          <span>{copy.versionNotice(versionNotice.latest, versionNotice.current)}</span>
         </div>
       )}
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
@@ -552,8 +671,8 @@ function App() {
           <button
             className="icon-button menu-button"
             onClick={() => setMobileNav(true)}
-            title="打开菜单"
-            aria-label="打开菜单"
+            title={copy.openMenu}
+            aria-label={copy.openMenu}
           >
             <Menu size={19} />
           </button>
@@ -566,7 +685,8 @@ function App() {
             <button
               className="icon-button"
               onClick={() => setDark((value) => !value)}
-              title={dark ? "切换浅色模式" : "切换深色模式"}
+              title={dark ? copy.toggleLight : copy.toggleDark}
+              aria-label={dark ? copy.toggleLight : copy.toggleDark}
             >
               {dark ? <Sun size={17} /> : <Moon size={17} />}
             </button>
@@ -577,7 +697,7 @@ function App() {
           {view === "mcp" ? (
             <McpPage language={language} />
           ) : view === "settings" ? (
-            <SettingsPage dark={dark} onToggleTheme={() => setDark((value) => !value)} />
+            <SettingsPage language={language} onLanguageChange={(next) => saveLanguage(next)} dark={dark} onToggleTheme={() => setDark((value) => !value)} />
           ) : (
             <>
               <section className="page-heading">
@@ -601,7 +721,7 @@ function App() {
                 <Stat
                   label={copy.memories}
                   value={stats.total.toString().padStart(2, "0")}
-                  note="已保存"
+                  note={copy.savedCount}
                 />
                 <Stat
                   label={copy.scopes}
@@ -694,14 +814,10 @@ function App() {
                         ? copy.noArchive
                         : view === "tags"
                           ? copy.noTags
-                          : view === "settings"
-                            ? copy.settingsManaged
-                            : copy.emptyMatch}
+                          : copy.emptyMatch}
                     </strong>
                     <span>
-                      {view === "archive" ||
-                      view === "tags" ||
-                      view === "settings"
+                      {view === "archive" || view === "tags"
                         ? activeCopy.description
                         : copy.emptyHelp}
                     </span>
@@ -784,6 +900,7 @@ function App() {
         />
       )}
       <Outlet />
+      {languageReady && languageSetup ? <LanguageSetup language={language} onSelect={(next) => saveLanguage(next)} /> : null}
     </div>
   );
 }
@@ -894,6 +1011,7 @@ function TimelineEvents({
   onSelect: (item: Memory) => void;
   language: Language;
 }) {
+  const copy = ui[language];
   const groups = useMemo(() => {
     const sorted = [...items].sort((a, b) => {
       const aTime = new Date(a.occurred_at ?? a.created_at).getTime();
@@ -918,7 +1036,7 @@ function TimelineEvents({
         <section className="timeline-day" key={day}>
           <header className="timeline-day-heading">
             <time>{timelineDay(day === "undated" ? null : day, language)}</time>
-            <span className="mono">{dayItems.length.toString().padStart(2, "0")} 条</span>
+                    <span className="mono">{dayItems.length.toString().padStart(2, "0")} {copy.timelineItems}</span>
           </header>
           <div className="timeline-day-items">
             {dayItems.map((item) => {
@@ -935,7 +1053,7 @@ function TimelineEvents({
                   <span className="timeline-event-body">
                     <span className="timeline-event-meta">
                       <span className={`kind-badge kind-${item.kind}`}>
-                        {kindLabels[item.kind] ?? item.kind}
+                        {kindLabels[language][item.kind] ?? item.kind}
                       </span>
                       <time>{timelineTime(eventDate, language)}</time>
                     </span>
@@ -943,7 +1061,7 @@ function TimelineEvents({
                     <span className="timeline-event-context">
                       {item.project ?? item.scope}
                       <span aria-hidden="true">·</span>
-                      {item.source ?? "Agent 写入"}
+                      {item.source ?? ui[language].agentWritten}
                     </span>
                   </span>
                 </button>
@@ -956,8 +1074,134 @@ function TimelineEvents({
   );
 }
 
+const mcpCopy = {
+  zh: {
+    copied: "已复制到剪贴板",
+    copyFailed: "复制失败，请手动复制",
+    codexWritten: "Codex MCP 配置已写入。重新启动 Codex 或开启新会话后生效。",
+    codexWriteFailed: "配置失败，请检查 Codex 配置目录。",
+    codexGuidanceWritten: "全局指令已写入。重新启动 Codex 或开启新会话后生效。",
+    writeFailed: "写入失败，请检查 Codex 配置目录的访问权限。",
+    keyCreateFailed: "Key 创建失败，请稍后重试。",
+    keyDeleteConfirm: (name: string) => `确定删除 Key“${name}”吗？删除后将立即失效，且无法恢复。`,
+    keyDelete: "删除",
+    keyCreated: "Key 已创建，可随时在下方再次复制",
+    copyConfig: "复制配置",
+    copiedConfig: "配置已复制",
+    copyAuthConfig: "复制带 Authorization Header 的配置",
+    keyName: "Key 名称",
+    unnamedKey: "未命名 Key",
+    access: "访问控制",
+    keyManage: "MCP Key 管理",
+    keyNote: "为每个客户端创建独立 Key，并按最小权限限制可调用的工具。",
+    createKey: "创建 Key",
+    keyEmpty: "暂无 Key",
+    allowTools: "允许调用的工具",
+    keyPlaceholder: "例如：平台 Agent",
+    allTools: "可调用全部工具",
+    toolCount: (n: number, total: number) => `可用工具 ${n}/${total}`,
+    recent: (value: string) => `最近使用 ${value}`,
+    never: "尚未使用",
+    rename: "修改名称",
+    connectionTab: "连接配置",
+    usageTab: "调用统计",
+    mcpPage: "MCP 页面",
+    streamable: "Streamable HTTP",
+    bearer: "Bearer Key",
+    codexConnection: "MCP 连接",
+    chooseKey: "选择用于连接的 Key。",
+    autoConnection: "将自动保存连接配置。",
+    readingAuth: "正在读取认证状态。",
+    createFirst: "请先创建 MCP Key",
+    configured: "已配置",
+    configure: "配置",
+    update: "更新",
+    taskMemory: "任务前置记忆",
+    taskMemoryDesc: "让 Codex 在每项任务开始前读取相关经验。",
+    enabled: "已启用",
+    needUpdate: "需要更新",
+    notConfigured: "未配置",
+    detecting: "检查中",
+    reading: "读取中",
+    usage: "调用统计",
+    usageTitle: "工具使用情况",
+    total: "累计调用",
+    failed: (n: number) => `${n} 次失败`,
+    latency: "平均处理耗时",
+    lastCall: "最近一次调用",
+    none: "暂无",
+    delete: "删除",
+    callCount: "次",
+    accessEyebrow: "访问控制",
+    createMcpKey: "创建 MCP Key",
+    close: "关闭",
+  },
+  en: {
+    copied: "Copied",
+    copyFailed: "Copy failed. Copy it manually.",
+    codexWritten: "Codex MCP configuration saved. Restart Codex or start a new session to apply it.",
+    codexWriteFailed: "Could not save the configuration. Check the Codex configuration directory.",
+    codexGuidanceWritten: "Global guidance saved. Restart Codex or start a new session to apply it.",
+    writeFailed: "Could not save global guidance. Check the Codex configuration directory.",
+    keyCreateFailed: "Could not create the key. Try again.",
+    keyDeleteConfirm: (name: string) => `Delete key “${name}”? It will stop working immediately.`,
+    keyDelete: "Delete",
+    keyCreated: "Key created. You can copy it below.",
+    copyConfig: "Copy configuration",
+    copiedConfig: "Configuration copied",
+    copyAuthConfig: "Copy configuration with Authorization Header",
+    keyName: "Key name",
+    unnamedKey: "Unnamed key",
+    access: "Access",
+    keyManage: "MCP keys",
+    keyNote: "Create one key per client and limit the tools it can call.",
+    createKey: "Create key",
+    keyEmpty: "No keys yet.",
+    allowTools: "Allowed tools",
+    keyPlaceholder: "For example: Workspace agent",
+    allTools: "All tools",
+    toolCount: (n: number, total: number) => `${n}/${total} tools`,
+    recent: (value: string) => `Last used ${value}`,
+    never: "Not used",
+    rename: "Rename",
+    connectionTab: "Connection",
+    usageTab: "Usage",
+    mcpPage: "MCP page",
+    streamable: "Streamable HTTP",
+    bearer: "Bearer Key",
+    codexConnection: "MCP connection",
+    chooseKey: "Choose a key for the connection.",
+    autoConnection: "The connection will be saved automatically.",
+    readingAuth: "Checking authentication status.",
+    createFirst: "Create an MCP key first",
+    configured: "Configured",
+    configure: "Configure",
+    update: "Update",
+    taskMemory: "Task memory",
+    taskMemoryDesc: "Have Codex read relevant experience before each task.",
+    enabled: "Enabled",
+    needUpdate: "Needs update",
+    notConfigured: "Not configured",
+    detecting: "Checking",
+    reading: "Loading",
+    usage: "Usage",
+    usageTitle: "Tool usage",
+    total: "Total calls",
+    failed: (n: number) => `${n} failed`,
+    latency: "Average latency",
+    lastCall: "Last call",
+    none: "None",
+    delete: "Delete",
+    callCount: "calls",
+    accessEyebrow: "Access",
+    createMcpKey: "Create MCP key",
+    close: "Close",
+  },
+} as const;
+
 function McpPage({ language }: { language: Language }) {
   const copy = ui[language];
+  const m = mcpCopy[language];
   const [copied, setCopied] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [stats, setStats] = useState<McpToolStats | null>(null);
@@ -1024,11 +1268,11 @@ function McpPage({ language }: { language: Language }) {
       if (!navigator.clipboard) throw new Error("clipboard_unavailable");
       await navigator.clipboard.writeText(value);
       setCopied(key);
-      setCopyMessage("已复制到剪贴板");
+      setCopyMessage(m.copied);
       window.setTimeout(() => setCopied(null), 1500);
       window.setTimeout(() => setCopyMessage(null), 2200);
     } catch {
-      setCopyMessage("复制失败，请手动复制");
+      setCopyMessage(m.copyFailed);
       window.setTimeout(() => setCopyMessage(null), 2600);
     }
   };
@@ -1041,9 +1285,9 @@ function McpPage({ language }: { language: Language }) {
       });
       if (!response.ok) throw new Error("install_failed");
       setCodexIntegration(await response.json());
-      setCodexMessage("全局指令已写入。重新启动 Codex 或开启新会话后生效。");
+      setCodexMessage(m.codexGuidanceWritten);
     } catch {
-      setCodexMessage("写入失败，请检查 Codex 配置目录的访问权限。");
+      setCodexMessage(m.writeFailed);
     } finally {
       setCodexInstalling(false);
     }
@@ -1059,9 +1303,9 @@ function McpPage({ language }: { language: Language }) {
       });
       if (!response.ok) throw new Error("install_failed");
       setCodexMcpIntegration(await response.json());
-      setCodexMcpMessage("Codex MCP 配置已写入。重新启动 Codex 或开启新会话后生效。");
+      setCodexMcpMessage(m.codexWritten);
     } catch {
-      setCodexMcpMessage(useBearerKey === true ? "配置失败，请检查 Codex 配置目录和 MCP Key。" : "配置失败，请检查 Codex 配置目录。");
+      setCodexMcpMessage(m.codexWriteFailed);
     } finally {
       setCodexMcpInstalling(false);
     }
@@ -1070,21 +1314,21 @@ function McpPage({ language }: { language: Language }) {
     setKeyBusy(true);
     setKeyMessage("");
     try {
-      const response = await fetch("/api/mcp/keys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: keyName.trim() || "未命名 Key", allowed_tools: keyTools }) });
+      const response = await fetch("/api/mcp/keys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: keyName.trim() || m.unnamedKey, allowed_tools: keyTools }) });
       if (!response.ok) throw new Error("create_key_failed");
       const result = (await response.json()) as { key: string; key_record: McpKey };
       setMcpKeys((current) => [result.key_record, ...current]);
       setNewKeySecret(result.key);
       setKeyName("");
     } catch {
-      setKeyMessage("Key 创建失败，请稍后重试。");
+      setKeyMessage(m.keyCreateFailed);
     } finally {
       setKeyBusy(false);
     }
   };
   const revokeMcpKey = async (id: string) => {
     const key = mcpKeys.find((item) => item.id === id);
-    if (!key || !window.confirm(`确定删除 Key“${key.name}”吗？删除后将立即失效，且无法恢复。`)) return;
+    if (!key || !window.confirm(m.keyDeleteConfirm(key.name))) return;
     const response = await fetch(`/api/mcp/keys/${id}`, { method: "DELETE" });
     if (!response.ok) return;
     setMcpKeys((current) => current.filter((item) => item.id !== id));
@@ -1096,31 +1340,31 @@ function McpPage({ language }: { language: Language }) {
     setMcpKeys((current) => current.map((key) => key.id === id ? updated : key));
     setEditingKeyId(null);
   };
-  const keyConfig = newKeySecret ? JSON.stringify({ mcpServers: { "memory-one": { type: "http", url: endpoint, headers: { Authorization: `Bearer ${newKeySecret}` } } } }, null, 2) : "";
+  const keyConfig = newKeySecret ? JSON.stringify({ mcpServers: { "memory-one": { type: "http", url: endpoint, ...(useBearerKey === true ? { headers: { Authorization: `Bearer ${newKeySecret}` } } : {}) } } }, null, 2) : "";
   const codexStatus =
     codexIntegration?.status === "configured"
-      ? "已配置"
+      ? m.configured
       : codexIntegration?.status === "update_available"
-        ? "可更新"
-        : "未配置";
+        ? m.needUpdate
+        : m.notConfigured;
   const codexButton =
     codexIntegration?.status === "update_available"
-      ? "更新全局指令"
-      : "启用全局记忆";
+      ? m.update
+      : m.enabled;
   const codexMcpConfigured = codexMcpIntegration?.status === "configured" && (useBearerKey !== true || codexMcpIntegration.configured_key_id === codexMcpKeyId);
   const codexMcpStatus =
     codexMcpIntegration?.status === "configured"
-      ? "已配置"
+      ? m.configured
       : codexMcpIntegration?.status === "update_available"
-        ? "需更新"
-        : "未配置";
+        ? m.needUpdate
+        : m.notConfigured;
   return (
     <div className={`mcp-page ${useBearerKey === null ? "mcp-loading" : ""}`}>
-      {copyMessage ? <div className={`copy-feedback ${copyMessage.startsWith("复制失败") ? "error" : ""}`} role="status">{copyMessage.startsWith("复制失败") ? <AlertCircle size={14} /> : <Check size={14} />}{copyMessage}</div> : null}
+      {copyMessage ? <div className={`copy-feedback ${copyMessage === m.copyFailed ? "error" : ""}`} role="status">{copyMessage === m.copyFailed ? <AlertCircle size={14} /> : <Check size={14} />}{copyMessage}</div> : null}
       <div className="mcp-navigation">
-      <nav className="mcp-tabs" role="tablist" aria-label="MCP 页面">
-        <button className={activeTab === "connection" ? "active" : ""} role="tab" aria-selected={activeTab === "connection"} onClick={() => setActiveTab("connection")}><Server size={15} />连接配置</button>
-        <button className={activeTab === "usage" ? "active" : ""} role="tab" aria-selected={activeTab === "usage"} onClick={() => setActiveTab("usage")}><Activity size={15} />调用统计</button>
+      <nav className="mcp-tabs" role="tablist" aria-label={m.mcpPage}>
+        <button className={activeTab === "connection" ? "active" : ""} role="tab" aria-selected={activeTab === "connection"} onClick={() => setActiveTab("connection")}><Server size={15} />{m.connectionTab}</button>
+        <button className={activeTab === "usage" ? "active" : ""} role="tab" aria-selected={activeTab === "usage"} onClick={() => setActiveTab("usage")}><Activity size={15} />{m.usageTab}</button>
       </nav>
       </div>
       {activeTab === "connection" && <div className="mcp-grid" role="tabpanel">
@@ -1140,8 +1384,8 @@ function McpPage({ language }: { language: Language }) {
           </div>
           <div className="endpoint-value">{endpoint}</div>
           <div className="endpoint-compact-meta">
-            <span><i className="status-dot" />Streamable HTTP</span>
-            <label className="switch-label"><span>Bearer Key</span><input type="checkbox" checked={useBearerKey === true} disabled={useBearerKey === null} onChange={(event) => updateBearerKey(event.target.checked)} /><i /></label>
+            <span><i className="status-dot" />{m.streamable}</span>
+            <label className="switch-label"><span>{m.bearer}</span><input type="checkbox" checked={useBearerKey === true} disabled={useBearerKey === null} onChange={(event) => updateBearerKey(event.target.checked)} /><i /></label>
           </div>
         </section>
         <section className="mcp-panel codex-mcp-panel">
@@ -1149,49 +1393,49 @@ function McpPage({ language }: { language: Language }) {
           <div className="codex-compact-list">
             <section className="codex-compact-row">
               <div className="codex-compact-copy">
-                <div className="codex-compact-title"><strong>MCP 连接</strong><span className={`integration-status status-${codexMcpIntegration?.status ?? "loading"}`}>{codexMcpIntegration ? codexMcpStatus : "检测中"}</span></div>
-                <p>{useBearerKey === true ? "选择 Key 后自动写入连接配置。" : useBearerKey === false ? "自动写入连接配置。" : "正在读取认证状态。"}</p>
+                <div className="codex-compact-title"><strong>{m.codexConnection}</strong><span className={`integration-status status-${codexMcpIntegration?.status ?? "loading"}`}>{codexMcpIntegration ? codexMcpStatus : m.detecting}</span></div>
+                <p>{useBearerKey === true ? m.chooseKey : useBearerKey === false ? m.autoConnection : m.readingAuth}</p>
                 {codexMcpMessage ? <div className="integration-message" role="status">{codexMcpMessage}</div> : null}
               </div>
               <div className="codex-compact-actions">
-                {useBearerKey === true ? <select aria-label="MCP Key" value={codexMcpKeyId} onChange={(event) => setCodexMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
+                {useBearerKey === true ? <select aria-label={m.bearer} value={codexMcpKeyId} onChange={(event) => setCodexMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
                 {mcpKeys.filter((key) => key.secret).map((key) => <option key={key.id} value={key.id}>{key.name} · {key.prefix}••••</option>)}
-                {!mcpKeys.some((key) => key.secret) ? <option value="">请先创建 MCP Key</option> : null}
+                {!mcpKeys.some((key) => key.secret) ? <option value="">{m.createFirst}</option> : null}
                 </select> : null}
-                <button className="primary-button" disabled={useBearerKey === null || !codexMcpIntegration || (useBearerKey === true && !codexMcpKeyId) || codexMcpInstalling || codexMcpConfigured} onClick={() => void installCodexMcp()}>{codexMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}{codexMcpConfigured ? "已配置" : codexMcpIntegration?.status === "not_configured" ? "配置" : "更新"}</button>
+                <button className="primary-button" disabled={useBearerKey === null || !codexMcpIntegration || (useBearerKey === true && !codexMcpKeyId) || codexMcpInstalling || codexMcpConfigured} onClick={() => void installCodexMcp()}>{codexMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}{codexMcpConfigured ? m.configured : codexMcpIntegration?.status === "not_configured" ? m.configure : m.update}</button>
               </div>
             </section>
             <section className="codex-compact-row">
               <div className="codex-compact-copy">
-                <div className="codex-compact-title"><strong>任务前置记忆</strong><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : "读取中"}</span></div>
-                <p>让 Codex 在每项任务开始前读取相关经验。</p>
+                <div className="codex-compact-title"><strong>{m.taskMemory}</strong><span className={`integration-status status-${codexIntegration?.status ?? "loading"}`}>{codexIntegration ? codexStatus : m.reading}</span></div>
+                <p>{m.taskMemoryDesc}</p>
                 {codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}
               </div>
-              <button className="primary-button" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? "已启用" : codexButton}</button>
+              <button className="primary-button" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? m.enabled : codexButton}</button>
             </section>
           </div>
         </section>
-        {useBearerKey === true && <section className="mcp-keys" role="region" aria-label="Key 管理">
-          <div className="mcp-tools-heading"><div><span className="eyebrow">访问控制</span><h2>MCP Key 管理</h2></div><KeyRound size={18} /></div>
-          <p className="mcp-key-note">为平台 Agent、Codex 或其他 MCP 客户端创建独立 Key，并按最小权限限制它可以调用的工具。</p>
-          <div className="mcp-key-create"><button className="primary-button" onClick={() => setShowKeyForm(true)}><KeyRound size={15} />创建 Key</button></div>
-          {newKeySecret ? <div className="mcp-key-secret"><strong>Key 已创建，可随时在下方再次复制</strong><code>{newKeySecret}</code><div><button className="icon-button" onClick={() => copyText(keyConfig, "key-config")} title="复制带 Key 的 MCP 配置">{copied === "key-config" ? <Check size={16} /> : <Copy size={16} />}</button><span>{copied === "key-config" ? "已复制配置" : "复制带 Authorization Header 的配置"}</span></div></div> : null}
-          <div className="mcp-key-list">{mcpKeys.length ? mcpKeys.map((key) => <div className="mcp-key-row" key={key.id}><KeyRound size={15} /><div>{editingKeyId === key.id ? <input className="mcp-key-name-input" autoFocus value={editingKeyName} onChange={(event) => setEditingKeyName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void renameMcpKey(key.id); if (event.key === "Escape") setEditingKeyId(null); }} onBlur={() => void renameMcpKey(key.id)} /> : <strong>{key.name}</strong>}<code>{key.prefix}••••••••</code><span>{key.allowed_tools.length ? `可用工具 ${key.allowed_tools.length}/${mcpTools.length}` : "可调用全部工具"}{key.last_used_at ? ` · 最近使用 ${formatDate(key.last_used_at, language)}` : " · 尚未使用"}</span><div className="tool-chip-list key-tool-list">{(key.allowed_tools.length ? key.allowed_tools : mcpTools.map(([name]) => name)).map((name) => <span className="tool-chip" key={name}>{name}</span>)}</div></div><div className="mcp-key-actions">{key.secret ? <button className="icon-button" onClick={() => copyText(key.secret!, `key-${key.id}`)} title="复制 Key">{copied === `key-${key.id}` ? <Check size={14} /> : <Copy size={14} />}</button> : null}<button className="icon-button" onClick={() => { setEditingKeyId(key.id); setEditingKeyName(key.name); }} title="修改名称"><Pencil size={14} /></button><button className="ghost-button" onClick={() => void revokeMcpKey(key.id)}>删除</button></div></div>) : <p className="mcp-key-empty">还没有创建 Key。</p>}</div>
+        {useBearerKey === true && <section className="mcp-keys" role="region" aria-label={m.keyManage}>
+          <div className="mcp-tools-heading"><div><span className="eyebrow">{m.access}</span><h2>{m.keyManage}</h2></div><KeyRound size={18} /></div>
+          <p className="mcp-key-note">{m.keyNote}</p>
+          <div className="mcp-key-create"><button className="primary-button" onClick={() => setShowKeyForm(true)}><KeyRound size={15} />{m.createKey}</button></div>
+          {newKeySecret ? <div className="mcp-key-secret"><strong>{m.keyCreated}</strong><code>{newKeySecret}</code><div><button className="icon-button" onClick={() => copyText(keyConfig, "key-config")} title={m.copyConfig}>{copied === "key-config" ? <Check size={16} /> : <Copy size={16} />}</button><span>{copied === "key-config" ? m.copiedConfig : m.copyAuthConfig}</span></div></div> : null}
+          <div className="mcp-key-list">{mcpKeys.length ? mcpKeys.map((key) => <div className="mcp-key-row" key={key.id}><KeyRound size={15} /><div>{editingKeyId === key.id ? <input className="mcp-key-name-input" autoFocus value={editingKeyName} onChange={(event) => setEditingKeyName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void renameMcpKey(key.id); if (event.key === "Escape") setEditingKeyId(null); }} onBlur={() => void renameMcpKey(key.id)} /> : <strong>{key.name}</strong>}<code>{key.prefix}••••••••</code><span>{key.allowed_tools.length ? m.toolCount(key.allowed_tools.length, mcpTools.length) : m.allTools}{key.last_used_at ? ` · ${m.recent(formatDate(key.last_used_at, language))}` : ` · ${m.never}`}</span><div className="tool-chip-list key-tool-list">{(key.allowed_tools.length ? key.allowed_tools : mcpTools.map(([name]) => name)).map((name) => <span className="tool-chip" key={name}>{name}</span>)}</div></div><div className="mcp-key-actions">{key.secret ? <button className="icon-button" onClick={() => copyText(key.secret!, `key-${key.id}`)} title={m.copyConfig}>{copied === `key-${key.id}` ? <Check size={14} /> : <Copy size={14} />}</button> : null}<button className="icon-button" onClick={() => { setEditingKeyId(key.id); setEditingKeyName(key.name); }} title={m.rename}><Pencil size={14} /></button><button className="ghost-button" onClick={() => void revokeMcpKey(key.id)}>{m.delete}</button></div></div>) : <p className="mcp-key-empty">{m.keyEmpty}</p>}</div>
         </section>}
       </div>}
-      {showKeyForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowKeyForm(false); }}><section className="key-create-modal" role="dialog" aria-modal="true" aria-label="创建 MCP Key">
-        <div className="composer-header"><div><span className="eyebrow">访问控制</span><h2>创建 MCP Key</h2></div><button className="icon-button" onClick={() => setShowKeyForm(false)} title="关闭"><X size={18} /></button></div>
-        <label className="config-field"><span>Key 名称</span><input autoFocus value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder="例如：平台 Agent" /></label>
-        <div className="mcp-key-tools"><span className="key-tools-label">允许调用的工具</span><div className="key-tools-grid">{mcpTools.map(([name]) => <label key={name}><input type="checkbox" checked={keyTools.includes(name)} onChange={(event) => setKeyTools((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div></div>
-        <div className="modal-actions"><button className="ghost-button" onClick={() => setShowKeyForm(false)}>取消</button><button className="primary-button" onClick={() => { void createMcpKey(); setShowKeyForm(false); }} disabled={keyBusy || keyTools.length === 0}>{keyBusy ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}创建 Key</button></div>
+      {showKeyForm && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowKeyForm(false); }}><section className="key-create-modal" role="dialog" aria-modal="true" aria-label={m.createKey}>
+        <div className="composer-header"><div><span className="eyebrow">{m.accessEyebrow}</span><h2>{m.createMcpKey}</h2></div><button className="icon-button" onClick={() => setShowKeyForm(false)} title={m.close} aria-label={m.close}><X size={18} /></button></div>
+        <label className="config-field"><span>{m.keyName}</span><input autoFocus value={keyName} onChange={(event) => setKeyName(event.target.value)} placeholder={m.keyPlaceholder} /></label>
+        <div className="mcp-key-tools"><span className="key-tools-label">{m.allowTools}</span><div className="key-tools-grid">{mcpTools.map(([name]) => <label key={name}><input type="checkbox" checked={keyTools.includes(name)} onChange={(event) => setKeyTools((current) => event.target.checked ? [...current, name] : current.filter((item) => item !== name))} />{name}</label>)}</div></div>
+        <div className="modal-actions"><button className="ghost-button" onClick={() => setShowKeyForm(false)}>{copy.cancel}</button><button className="primary-button" onClick={() => { void createMcpKey(); setShowKeyForm(false); }} disabled={keyBusy || keyTools.length === 0}>{keyBusy ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}{m.createKey}</button></div>
         {keyMessage ? <p className="integration-message" role="alert">{keyMessage}</p> : null}
       </section></div>}
       {activeTab === "usage" && <>
       <section className="mcp-usage" role="tabpanel">
         <div className="mcp-tools-heading">
           <div>
-            <span className="eyebrow">调用统计</span>
-            <h2>工具使用情况</h2>
+            <span className="eyebrow">{m.usage}</span>
+            <h2>{m.usageTitle}</h2>
           </div>
           <Activity size={18} />
         </div>
@@ -1199,28 +1443,28 @@ function McpPage({ language }: { language: Language }) {
           <Stat
             label="TOTAL CALLS"
             value={stats ? String(stats.total_calls) : "--"}
-            note="累计调用"
+            note={m.total}
           />
           <Stat
             label="SUCCESS RATE"
             value={stats?.total_calls ? `${successRate}%` : "--"}
-            note={stats ? `${stats.failed_calls} 次失败` : "读取中"}
+            note={stats ? m.failed(stats.failed_calls) : m.reading}
           />
           <Stat
             label="AVG LATENCY"
             value={
               stats?.total_calls ? `${stats.average_duration_ms} ms` : "--"
             }
-            note="平均处理耗时"
+            note={m.latency}
           />
           <Stat
             label="LAST CALL"
             value={
               stats?.last_called_at
                 ? formatDate(stats.last_called_at, language)
-                : "暂无"
+                : m.none
             }
-            note="最近一次调用"
+            note={m.lastCall}
             date
           />
         </div>
@@ -1246,7 +1490,7 @@ function McpPage({ language }: { language: Language }) {
                 <span>{language === "zh" ? zhDescription : enDescription}</span>
               </div>
               <div className="tool-meta">
-                <code>{callsByTool.get(name) ?? 0} 次</code>
+                <code>{callsByTool.get(name) ?? 0} {m.callCount}</code>
                 <code>{copy.http}</code>
               </div>
             </article>
@@ -1288,7 +1532,7 @@ function MemoryCard({
   language: Language;
 }) {
   const copy = ui[language];
-  const labels = kindLabels;
+  const labels = kindLabels[language];
   const confidence = Math.round(item.confidence * 100);
   return (
     <button
@@ -1318,7 +1562,7 @@ function MemoryCard({
             </>
           )}
         </span>
-        <span className="recall-count">{item.recall_count ?? 0} 次召回</span>
+        <span className="recall-count">{item.recall_count ?? 0}{copy.recallTimes}</span>
         <span className="confidence">
           <span className="confidence-meter">
             <i style={{ width: `${confidence}%` }} />
@@ -1338,7 +1582,7 @@ function MemoryDetail({
   language: Language;
 }) {
   const copy = ui[language];
-  const labels = kindLabels;
+  const labels = kindLabels[language];
   return (
     <div className="detail-body">
       <div className={`detail-kind kind-badge kind-${item.kind}`}>
@@ -1414,38 +1658,103 @@ function Signal({
   );
 }
 
+function LanguageSetup({ language, onSelect }: { language: Language; onSelect: (language: Language) => Promise<void> }) {
+  const copy = ui[language];
+  const [selected, setSelected] = useState<Language>(language);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const save = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await Promise.resolve(onSelect(selected));
+    } catch {
+      setError(copy.languageSaveFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div className="modal-backdrop language-setup-backdrop">
+      <section className="language-setup" role="dialog" aria-modal="true" aria-labelledby="language-setup-title">
+        <span className="eyebrow">Memory One</span>
+        <h2 id="language-setup-title">{copy.setupTitle}</h2>
+        <p>{copy.setupDescription}</p>
+        <div className="language-options">
+          <button className={selected === "zh" ? "selected" : ""} onClick={() => setSelected("zh")}><strong>中文</strong><span>简体中文</span></button>
+          <button className={selected === "en" ? "selected" : ""} onClick={() => setSelected("en")}><strong>English</strong><span>English</span></button>
+        </div>
+        {error ? <p className="settings-message" role="alert">{error}</p> : null}
+        <button className="primary-button language-continue" onClick={() => void save()} disabled={saving}>{saving ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{copy.continue}</button>
+      </section>
+    </div>
+  );
+}
+
 function SettingsPage({
+  language,
+  onLanguageChange,
   dark,
   onToggleTheme,
 }: {
+  language: Language;
+  onLanguageChange: (language: Language) => Promise<void>;
   dark: boolean;
   onToggleTheme: () => void;
 }) {
+  const copy = ui[language];
+  const [languageBusy, setLanguageBusy] = useState(false);
+  const [languageMessage, setLanguageMessage] = useState("");
+  const changeLanguage = async (next: Language) => {
+    if (next === language) return;
+    setLanguageBusy(true);
+    setLanguageMessage("");
+    try {
+      await Promise.resolve(onLanguageChange(next));
+      setLanguageMessage(ui[next].languageSaved);
+    } catch {
+      setLanguageMessage(copy.languageSaveFailed);
+    } finally { setLanguageBusy(false); }
+  };
   return (
     <div className="settings-page">
       <section className="page-heading">
         <div>
-          <div className="heading-kicker"><span className="live-dot" />本地工作区</div>
-          <h1>设置</h1>
-          <p>调整界面显示，并查看当前数据存储位置。</p>
+          <div className="heading-kicker"><span className="live-dot" />{copy.localMemory}</div>
+          <h1>{viewCopy[language].settings.title}</h1>
+          <p>{viewCopy[language].settings.description}</p>
         </div>
       </section>
       <section className="config-panel settings-panel">
         <div className="config-panel-heading">
-          <div><span className="eyebrow">APPEARANCE</span><h2>界面显示</h2></div>
+          <div><span className="eyebrow">{copy.languageTitle}</span><h2>{copy.languageTitle}</h2></div>
+          <span className="language-current">{language === "zh" ? "中文" : "English"}</span>
+        </div>
+        <div className="settings-row language-settings-row">
+          <span><strong>{copy.languageTitle}</strong><small>{copy.languageDescription}</small></span>
+          <div className="language-switch" role="group" aria-label={copy.languageTitle}>
+            <button className={language === "zh" ? "selected" : ""} onClick={() => void changeLanguage("zh")} disabled={languageBusy}>中文</button>
+            <button className={language === "en" ? "selected" : ""} onClick={() => void changeLanguage("en")} disabled={languageBusy}>English</button>
+          </div>
+        </div>
+        {languageMessage ? <p className="settings-message" role="status">{languageMessage}</p> : null}
+      </section>
+      <section className="config-panel settings-panel">
+        <div className="config-panel-heading">
+          <div><span className="eyebrow">{copy.appearanceEyebrow}</span><h2>{copy.appearance}</h2></div>
           {dark ? <Moon size={19} /> : <Sun size={19} />}
         </div>
         <div className="settings-row">
-          <span><strong>深色模式</strong><small>在浅色和深色界面之间切换。</small></span>
-          <button className="ghost-button" onClick={onToggleTheme}>{dark ? "切换浅色" : "切换深色"}</button>
+          <span><strong>{copy.darkMode}</strong><small>{copy.darkModeDescription}</small></span>
+          <button className="ghost-button" onClick={onToggleTheme}>{dark ? copy.toggleLight : copy.toggleDark}</button>
         </div>
       </section>
       <section className="config-panel settings-panel">
         <div className="config-panel-heading">
-          <div><span className="eyebrow">STORAGE</span><h2>本地存储</h2></div>
+          <div><span className="eyebrow">{copy.storageEyebrow}</span><h2>{copy.localDatabase}</h2></div>
           <Database size={19} />
         </div>
-        <div className="settings-storage"><span className="status-dot" /><strong>SQLite</strong><span>记忆仅保存在当前设备。</span></div>
+        <div className="settings-storage"><span className="status-dot" /><strong>SQLite</strong><span>{copy.storageNote}</span></div>
       </section>
     </div>
   );
@@ -1466,7 +1775,7 @@ function Composer({
   language: Language;
 }) {
   const copy = ui[language];
-  const labels = kindLabels;
+  const labels = kindLabels[language];
   const [content, setContent] = useState("");
   const [kind, setKind] = useState("fact");
   const [project, setProject] = useState("");
@@ -1601,10 +1910,13 @@ const isAgentConfigured = (settings: AgentSettings) =>
 function AgentConfigForm({
   initial,
   onSaved,
+  language,
 }: {
   initial: AgentSettings;
   onSaved: (settings: AgentSettings) => Promise<void> | void;
+  language: Language;
 }) {
+  const copy = ui[language];
   const [baseUrl, setBaseUrl] = useState(initial.baseUrl);
   const [apiKey, setApiKey] = useState(initial.apiKey);
   const [model, setModel] = useState(initial.model);
@@ -1638,7 +1950,7 @@ function AgentConfigForm({
       await onSaved(next);
       window.setTimeout(() => setSaved(false), 1800);
     } catch {
-      setModelMessage("配置保存失败，请稍后重试。");
+      setModelMessage(copy.configSaveFailed);
     } finally {
       setSaving(false);
     }
@@ -1657,10 +1969,10 @@ function AgentConfigForm({
       const nextModels = Array.isArray(result.models) ? result.models : [];
       setModels(nextModels);
       setModel((current) => current.trim() || nextModels[0] || current);
-      setModelMessage(nextModels.length ? `已获取 ${nextModels.length} 个模型` : "没有可用模型");
+      setModelMessage(nextModels.length ? copy.fetchedModels(nextModels.length) : copy.noModels);
     } catch {
       setModels([]);
-      setModelMessage("模型列表获取失败，请检查供应商、Base URL 和 API Key。");
+      setModelMessage(copy.modelListFailed);
     } finally {
       setModelsBusy(false);
     }
@@ -1672,21 +1984,22 @@ function AgentConfigForm({
           <div className="agent-config-fields">
             <label className="config-field"><span>Base URL</span><input required value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" /></label>
             <label className="config-field"><span>API Key</span><input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="sk-..." autoComplete="off" /></label>
-            <label className="config-field"><span>请求格式</span><Select value={provider} onValueChange={(value) => { setProvider(value); setModels([]); setModelMessage(""); }} options={[{ value: "openai", label: "OpenAI" }, { value: "anthropic", label: "Anthropic" }, { value: "openai-compatible", label: "OpenAI Compatible" }]} ariaLabel="请求格式" placeholder="选择请求格式" required disabled={saving} /></label>
-            <label className="config-field"><span>模型</span><div className="model-field">{models.length ? <Select value={model} onValueChange={setModel} options={[...(model && !models.includes(model) ? [{ value: model, label: model }] : []), ...models.map((item) => ({ value: item, label: item }))]} ariaLabel="模型" placeholder="选择模型" required disabled={saving} /> : <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder="选择或输入模型" />}<button type="button" className="ghost-button" onClick={() => void fetchModels()} disabled={modelsBusy || saving}>{modelsBusy ? <LoaderCircle className="spin" size={14} /> : "获取列表"}</button></div>{modelMessage ? <small className="model-message">{modelMessage}</small> : null}</label>
+            <label className="config-field"><span>{copy.requestFormat}</span><Select value={provider} onValueChange={(value) => { setProvider(value); setModels([]); setModelMessage(""); }} options={[{ value: "openai", label: "OpenAI" }, { value: "anthropic", label: "Anthropic" }, { value: "openai-compatible", label: "OpenAI Compatible" }]} ariaLabel={copy.requestFormat} placeholder={copy.chooseRequestFormat} required disabled={saving} /></label>
+            <label className="config-field"><span>{copy.model}</span><div className="model-field">{models.length ? <Select value={model} onValueChange={setModel} options={[...(model && !models.includes(model) ? [{ value: model, label: model }] : []), ...models.map((item) => ({ value: item, label: item }))]} ariaLabel={copy.model} placeholder={copy.chooseOrEnterModel} required disabled={saving} /> : <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder={copy.chooseOrEnterModel} />}<button type="button" className="ghost-button" onClick={() => void fetchModels()} disabled={modelsBusy || saving}>{modelsBusy ? <LoaderCircle className="spin" size={14} /> : copy.fetchModels}</button></div>{modelMessage ? <small className="model-message">{modelMessage}</small> : null}</label>
           </div>
         </section>
       </div>
-      <div className="agent-config-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{saving ? "保存中" : saved ? "已保存" : "保存配置"}</button></div>
+      <div className="agent-config-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{saving ? copy.saving : saved ? copy.saved : copy.saveConfiguration}</button></div>
     </form>
   );
 }
 
-function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
+function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () => void; language?: Language }) {
+  const copy = ui[language];
   const welcomeMessage: AgentMessage = {
     id: "welcome",
     role: "assistant",
-    content: "你好，我是记忆管家。可以帮你搜索、保存、修改、删除记忆，也可以总结你的偏好和特点。",
+    content: copy.welcome,
   };
   const [settings, setSettings] = useState<AgentSettings>(defaultAgentSettings);
   const [tab, setTab] = useState<"chat" | "config">("config");
@@ -1780,7 +2093,7 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
       if (toolCalls.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
     } catch (caught) {
       setStreamingId(null); const detail = caught instanceof Error ? caught.message : "";
-      setError(detail === "missing_base_url" ? "请先填写 Base URL。" : detail === "missing_api_key" ? "请先完成 Agent 配置。" : detail.startsWith("provider_http_") ? "模型供应商请求失败，请检查供应商、模型和 Base URL。" : "暂时无法连接记忆管家，请稍后再试。");
+      setError(detail === "missing_base_url" ? copy.missingBaseUrl : detail === "missing_api_key" ? copy.missingApiKey : detail.startsWith("provider_http_") ? copy.providerRequestFailed : copy.agentRequestFailed);
     } finally {
       setActiveRequests((count) => Math.max(0, count - 1));
     }
@@ -1854,37 +2167,37 @@ function AgentChat({ onMemoryChanged }: { onMemoryChanged: () => void }) {
     } catch (caught) {
       setStreamingId(null);
       const detail = caught instanceof Error ? caught.message : "";
-      setError(detail === "missing_base_url" ? "请先填写 Base URL。" : detail === "missing_api_key" ? "请先完成 Agent 配置。" : detail.startsWith("provider_http_") ? "模型供应商请求失败，请检查供应商、模型和 Base URL。" : "暂时无法连接记忆管家，请稍后再试。");
+      setError(detail === "missing_base_url" ? copy.missingBaseUrl : detail === "missing_api_key" ? copy.missingApiKey : detail.startsWith("provider_http_") ? copy.providerRequestFailed : copy.agentRequestFailed);
     } finally { setActiveRequests((count) => Math.max(0, count - 1)); }
     */
   };
-  const suggestions = ["总结我的特点", "搜索最近的项目约定", "记住我喜欢简洁的界面", "/new"];
+  const suggestions = [copy.suggestionTraits, copy.suggestionProjects, copy.suggestionConcise, "/new"];
   const openAgent = () => { setTab(isAgentConfigured(settings) ? "chat" : "config"); setOpen(true); };
   const streamingMessage = streamingId ? messages.find((message) => message.id === streamingId) : null;
   return (
     <div className={`agent-float ${open ? "agent-float-open" : ""}`}>
       <div className="agent-float-position">
-        {!open && <button className="agent-float-button" onClick={openAgent} title={`打开${settings.name}`} aria-label={`打开${settings.name}`} disabled={!settingsLoaded}><Bot size={21} /></button>}
+        {!open && <button className="agent-float-button" onClick={openAgent} title={copy.openAgent} aria-label={copy.openAgent} disabled={!settingsLoaded}><Bot size={21} /></button>}
         {open && <section ref={panelRef} className="agent-panel" aria-label={settings.name}>
           <header className="agent-header">
-            <div className="agent-title"><span className="agent-avatar"><Brain size={17} /></span><div><strong>{settings.name}</strong><span>通过 MCP 管理你的记忆</span></div></div>
-            <button className="icon-button" onClick={() => setOpen(false)} title="收起" aria-label="收起"><ChevronDown size={18} /></button>
+            <div className="agent-title"><span className="agent-avatar"><Brain size={17} /></span><div><strong>{settings.name}</strong><span>{copy.agentDescription}</span></div></div>
+            <button className="icon-button" onClick={() => setOpen(false)} title={copy.collapse} aria-label={copy.collapse}><ChevronDown size={18} /></button>
           </header>
-          <div className="agent-tabs" role="tablist" aria-label="Agent 页面">
-            <button role="tab" aria-selected={tab === "chat"} className={tab === "chat" ? "active" : ""} disabled={!configured} onClick={() => setTab("chat")}><MessageCircle size={14} />对话</button>
-            <button role="tab" aria-selected={tab === "config"} className={tab === "config" ? "active" : ""} onClick={() => setTab("config")}><Settings2 size={14} />配置</button>
+          <div className="agent-tabs" role="tablist" aria-label={copy.agentTabs}>
+            <button role="tab" aria-selected={tab === "chat"} className={tab === "chat" ? "active" : ""} disabled={!configured} onClick={() => setTab("chat")}><MessageCircle size={14} />{copy.chat}</button>
+            <button role="tab" aria-selected={tab === "config"} className={tab === "config" ? "active" : ""} onClick={() => setTab("config")}><Settings2 size={14} />{copy.configuration}</button>
           </div>
-          {tab === "config" ? <AgentConfigForm initial={settings} onSaved={(next) => { setSettings(next); setTab(isAgentConfigured(next) ? "chat" : "config"); }} /> : <>
+          {tab === "config" ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); setTab(isAgentConfigured(next) ? "chat" : "config"); }} /> : <>
             <div className="agent-messages">
               {messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>
                 {message.role === "user" || message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}
                 {message.toolCalls?.length ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory_get_context" || (tool.count ?? 0) > 0).map((tool, index) => <span key={`${message.id}-tool-${index}`}><Check size={11} />{tool.label}{tool.count !== undefined ? ` · ${tool.count}` : ""}</span>)}</div> : null}
               </article>)}
-              {sending && !streamingMessage?.content && <div className="agent-thinking" role="status" aria-label="正在处理"><LoaderCircle size={14} /><span className="agent-thinking-label">正在读取记忆并生成回复</span><i /><i /><i /></div>}
+              {sending && !streamingMessage?.content && <div className="agent-thinking" role="status" aria-label={copy.processing}><LoaderCircle size={14} /><span className="agent-thinking-label">{copy.readingMemory}</span><i /><i /><i /></div>}
               {error && <p className="agent-error" role="alert">{error}</p>}
             </div>
             <div className="agent-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)}>{suggestion}</button>)}</div>
-            <form className="agent-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder="告诉记忆管家你想做什么..." rows={1} /><button className="agent-send" type="submit" disabled={!draft.trim()} title="发送"><Send size={17} /></button></form>
+            <form className="agent-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={copy.agentPlaceholder} rows={1} /><button className="agent-send" type="submit" disabled={!draft.trim()} title={copy.send}><Send size={17} /></button></form>
           </>}
         </section>}
       </div>

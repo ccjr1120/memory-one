@@ -71,3 +71,9 @@ The `openai` provider uses the OpenAI Responses API; `openai-compatible` uses Ch
 ## Production CLI Convention
 
 The globally installed CLI command is `memoryone` without a hyphen. When `memoryone start` finds port `23888` occupied, ask the user whether to terminate the occupying process instead of failing immediately.
+
+## Interface Language and Copy
+
+- The user-facing web UI supports Chinese and English. On first install or first start, let the user choose a language; the choice can be changed from Web settings.
+- Keep buttons, labels, and explanatory copy restrained. Do not expose unrelated internal implementation details in user-facing messages.
+- Display user-authored memory content exactly as entered; do not translate it.

@@ -25,6 +25,8 @@ npm install --global @ccjr1120/memory-one
 memoryone start
 ```
 
+首次启动时，命令行会让你选择 **中文** 或 **English**。之后可以在工作台的 **设置** 中修改界面语言。
+
 启动后：
 
 - 工作台：<http://127.0.0.1:23888/>

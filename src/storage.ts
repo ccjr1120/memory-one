@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 export type MemoryInput = {
@@ -61,6 +61,13 @@ export type McpKey = {
   revoked_at: string | null;
 };
 
+export type AppLanguage = "zh" | "en";
+
+export type AppConfig = {
+  language: AppLanguage | null;
+  updated_at: string | null;
+};
+
 export type AgentConfig = {
   name: string;
   scope: string;
@@ -74,11 +81,43 @@ export type AgentConfig = {
 
 const now = () => new Date().toISOString();
 
+const searchStopWords = new Set([
+  "以及", "然后", "但是", "因为", "所以", "这个", "那个", "如何", "需要", "进行", "相关", "当前",
+  "设计", "结合", "传入", "版本", "不依赖", "机制", "问题", "实现", "一下", "一下子",
+]);
+
+function searchTerms(query: string): string[] {
+  const terms = new Set<string>();
+  const add = (term: string) => {
+    const value = term.trim();
+    if (!value || searchStopWords.has(value)) return;
+    terms.add(value);
+  };
+
+  for (const match of query.replace(/[\r\n]+/g, " ").matchAll(/[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{2,}/g)) {
+    const value = match[0];
+    if (/^[\u4e00-\u9fff]+$/.test(value) && value.length > 4) {
+      add(value);
+      for (let index = 0; index < value.length - 1; index += 2) add(value.slice(index, index + 2));
+    } else {
+      add(value);
+    }
+  }
+  return [...terms].slice(0, 16);
+}
+
+const quoteFtsTerm = (term: string) => `"${term.replaceAll('"', '""')}"`;
+const likeScore = (terms: string[], alias = "m") => terms.map((_, index) => `CASE WHEN ${alias}.content LIKE @pattern${index} THEN 1 ELSE 0 END`).join(" + ") || "0";
+const likeWhere = (terms: string[], alias = "m") => terms.map((_, index) => `${alias}.content LIKE @pattern${index}`).join(" OR ") || "0";
+const likeParams = (terms: string[]) => Object.fromEntries(terms.map((term, index) => [`pattern${index}`, `%${term}%`]));
+
 export class MemoryStore {
   private readonly db: Database.Database;
+  private readonly languageFile: string;
 
   constructor(path = process.env.MEMORY_DB_PATH ?? "data/memory.db") {
     mkdirSync(dirname(path), { recursive: true });
+    this.languageFile = join(dirname(path), "language");
     this.db = new Database(path);
     this.db.pragma("journal_mode = WAL");
     this.db.pragma("busy_timeout = 5000");
@@ -150,6 +189,11 @@ export class MemoryStore {
         use_bearer_key INTEGER NOT NULL DEFAULT 1,
         updated_at TEXT
       );
+      CREATE TABLE IF NOT EXISTS app_config (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        language TEXT NOT NULL CHECK (language IN ('zh', 'en')),
+        updated_at TEXT
+      );
       CREATE INDEX IF NOT EXISTS idx_mcp_keys_active ON mcp_keys(revoked_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
         content, kind, scope, project, source, content='memories', content_rowid='rowid'
@@ -175,6 +219,15 @@ export class MemoryStore {
     const keyColumns = this.db.prepare("PRAGMA table_info(mcp_keys)").all() as Array<{ name: string }>;
     if (!keyColumns.some((column) => column.name === "is_default")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
     if (!keyColumns.some((column) => column.name === "secret")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN secret TEXT");
+    const existingLanguage = this.getAppConfig().language;
+    if (!existingLanguage) {
+      try {
+        const storedLanguage = readFileSync(this.languageFile, "utf8").trim();
+        if (storedLanguage === "zh" || storedLanguage === "en") this.saveAppConfig(storedLanguage);
+      } catch {}
+      const environmentLanguage = process.env.MEMORY_LANGUAGE;
+      if (!this.getAppConfig().language && (environmentLanguage === "zh" || environmentLanguage === "en")) this.saveAppConfig(environmentLanguage);
+    }
     this.rebuildFtsIfNeeded();
   }
 
@@ -231,19 +284,24 @@ export class MemoryStore {
 
   search(query: string, scope = "user", project: string | null = null, limit = 20): Memory[] {
     const max = Math.min(Math.max(limit, 1), 100);
+    const terms = searchTerms(query);
+    const ftsQuery = terms.map(quoteFtsTerm).join(" OR ");
     let rows: unknown[] = [];
     try {
+      if (!ftsQuery) throw new Error("empty_search_query");
       rows = (project
-        ? this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.project = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, project, max)
-        : this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(query, scope, max)) as unknown[];
+        ? this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.project = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(ftsQuery, scope, project, max)
+        : this.db.prepare("SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid WHERE memories_fts MATCH ? AND m.scope = ? AND m.deleted_at IS NULL ORDER BY score LIMIT ?").all(ftsQuery, scope, max)) as unknown[];
     } catch {
-      // FTS5 treats punctuation as query syntax; use the substring path for invalid expressions.
       rows = [];
     }
     if (!rows.length) {
-      rows = project
-        ? this.db.prepare("SELECT * FROM memories WHERE content LIKE ? AND scope = ? AND project = ? AND deleted_at IS NULL ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?").all(`%${query}%`, scope, project, max)
-        : this.db.prepare("SELECT * FROM memories WHERE content LIKE ? AND scope = ? AND deleted_at IS NULL ORDER BY COALESCE(occurred_at, created_at) DESC LIMIT ?").all(`%${query}%`, scope, max);
+      const params = { scope, project, limit: max, ...likeParams(terms) };
+      rows = terms.length
+        ? project
+          ? this.db.prepare(`SELECT m.* FROM memories m WHERE (${likeWhere(terms)}) AND m.scope = @scope AND m.project = @project AND m.deleted_at IS NULL ORDER BY ${likeScore(terms)} DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all(params)
+          : this.db.prepare(`SELECT m.* FROM memories m WHERE (${likeWhere(terms)}) AND m.scope = @scope AND m.deleted_at IS NULL ORDER BY ${likeScore(terms)} DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all(params)
+        : [];
     }
     return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
   }
@@ -251,9 +309,11 @@ export class MemoryStore {
   context(query: string | null, scope = "user", project: string | null = null, limit = 10): Memory[] {
     const max = Math.min(Math.max(limit, 1), 100);
     const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
-    const params = { query, scope, project, limit: max };
+    const terms = query ? searchTerms(query) : [];
+    const ftsQuery = terms.map(quoteFtsTerm).join(" OR ");
+    const params = { query: ftsQuery, scope, project, limit: max, ...likeParams(terms) };
     let rows: unknown[] = [];
-    if (query) {
+    if (ftsQuery) {
       try {
         rows = this.db.prepare(`SELECT m.*, bm25(memories_fts) AS score
           FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
@@ -264,9 +324,9 @@ export class MemoryStore {
       }
       if (!rows.length) {
         rows = this.db.prepare(`SELECT m.* FROM memories m
-          WHERE m.content LIKE @pattern AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
-          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
-          .all({ ...params, pattern: `%${query}%` }) as unknown[];
+          WHERE (${likeWhere(terms)}) AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
+          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, ${likeScore(terms)} DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
+          .all(params) as unknown[];
       }
     } else {
       rows = this.db.prepare(`SELECT m.* FROM memories m
@@ -382,6 +442,21 @@ export class MemoryStore {
     const row = this.db.prepare("SELECT name, scope, provider, model, base_url, api_key, auto_context, updated_at FROM agent_config WHERE id = 1").get() as Record<string, unknown> | undefined;
     if (!row) return { name: "记忆管家", scope: "", provider: "", model: "", base_url: "", api_key: "", auto_context: true, updated_at: null };
     return { ...row, auto_context: Boolean(row.auto_context) } as AgentConfig;
+  }
+
+
+  getAppConfig(): AppConfig {
+    const row = this.db.prepare("SELECT language, updated_at FROM app_config WHERE id = 1").get() as Record<string, unknown> | undefined;
+    if (!row) return { language: null, updated_at: null };
+    return { language: row.language === "en" ? "en" : "zh", updated_at: String(row.updated_at ?? "") || null };
+  }
+
+  saveAppConfig(language: AppLanguage): AppConfig {
+    const updatedAt = now();
+    this.db.prepare(`INSERT INTO app_config (id, language, updated_at) VALUES (1, @language, @updated_at)
+      ON CONFLICT(id) DO UPDATE SET language = excluded.language, updated_at = excluded.updated_at`).run({ language, updated_at: updatedAt });
+    writeFileSync(this.languageFile, `${language}\n`, "utf8");
+    return this.getAppConfig();
   }
 
   getMcpConfig(): { use_bearer_key: boolean; updated_at: string | null } {

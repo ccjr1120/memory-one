@@ -12,8 +12,74 @@ const runtimeDir = join(homedir(), ".local", "share", "memory-one");
 const dataDir = join(runtimeDir, "data");
 const pidFile = join(runtimeDir, "memory-one.pid");
 const logFile = join(runtimeDir, "memory-one.log");
+const languageFile = join(dataDir, "language");
 const port = 23888;
 const url = `http://127.0.0.1:${port}/`;
+
+function readLanguage() {
+  try {
+    const value = readFileSync(languageFile, "utf8").trim();
+    return value === "en" ? "en" : value === "zh" ? "zh" : null;
+  } catch {
+    return null;
+  }
+}
+
+const messages = {
+  zh: {
+    choose: "选择界面语言 / Choose interface language\n  1. 中文\n  2. English\n请输入 1 或 2 [1]：",
+    started: (value) => `Memory One 已启动：${value}`,
+    running: (pid, value) => `Memory One 已在运行（PID ${pid}）：${value}`,
+    mcp: (value) => `MCP：${value}mcp/`,
+    startFailed: "Memory One 启动失败。",
+    startTimeout: "Memory One 启动超时。",
+    occupied: (pids) => `端口 ${port} 已被进程 ${pids.join(", ")} 占用，是否终止？[y/N] `,
+    cancelled: "已取消。",
+    notRunning: "Memory One 未运行。",
+    stopped: "Memory One 已停止。",
+    updateFailed: "Memory One 更新失败。",
+    updated: "Memory One 已更新。",
+    status: (pid, value) => `Memory One 正在运行（PID ${pid}）：${value}`,
+    opening: "正在打开 Memory One。",
+    help: `Memory One\n\n用法：\n  memoryone start   启动\n  memoryone stop    停止\n  memoryone status  查看状态\n  memoryone open    打开工作台\n  memoryone update  更新`,
+  },
+  en: {
+    choose: "Choose interface language / 选择界面语言\n  1. 中文\n  2. English\nEnter 1 or 2 [1]: ",
+    started: (value) => `Memory One started: ${value}`,
+    running: (pid, value) => `Memory One is already running (PID ${pid}): ${value}`,
+    mcp: (value) => `MCP: ${value}mcp/`,
+    startFailed: "Memory One failed to start.",
+    startTimeout: "Memory One took too long to start.",
+    occupied: (pids) => `Port ${port} is used by process ${pids.join(", ")}. Stop it? [y/N] `,
+    cancelled: "Cancelled.",
+    notRunning: "Memory One is not running.",
+    stopped: "Memory One stopped.",
+    updateFailed: "Memory One update failed.",
+    updated: "Memory One updated.",
+    status: (pid, value) => `Memory One is running (PID ${pid}): ${value}`,
+    opening: "Opening Memory One.",
+    help: `Memory One\n\nUsage:\n  memoryone start   Start\n  memoryone stop    Stop\n  memoryone status  Show status\n  memoryone open    Open workspace\n  memoryone update  Update`,
+  },
+};
+
+async function ensureLanguage() {
+  const current = readLanguage();
+  if (current) return current;
+  mkdirSync(dataDir, { recursive: true });
+  let language = "zh";
+  if (process.stdin.isTTY && process.stdout.isTTY) {
+    const prompt = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await prompt.question(messages.zh.choose);
+    prompt.close();
+    language = answer.trim() === "2" || answer.trim().toLowerCase() === "en" ? "en" : "zh";
+  }
+  writeFileSync(languageFile, `${language}\n`);
+  return language;
+}
+
+function copy() {
+  return messages[readLanguage() ?? "zh"];
+}
 
 function readPid() {
   if (!existsSync(pidFile)) return null;
@@ -56,10 +122,10 @@ async function releaseOccupiedPort() {
   const pids = listeningPids();
   if (!pids.length) return true;
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await prompt.question(`端口 ${port} 已被进程 ${pids.join(", ")} 占用，是否终止占用进程？[y/N] `);
+  const answer = await prompt.question(copy().occupied(pids));
   prompt.close();
   if (!/^(y|yes|是)$/i.test(answer.trim())) {
-    console.log("已取消启动。");
+    console.log(copy().cancelled);
     return false;
   }
   for (const pid of pids) {
@@ -73,9 +139,11 @@ async function releaseOccupiedPort() {
 }
 
 async function start() {
+  const language = await ensureLanguage();
+  const text = messages[language];
   const runningPid = currentPid();
   if (runningPid) {
-    console.log(`Memory One 已在运行（PID ${runningPid}）：${url}`);
+    console.log(text.running(runningPid, url));
     return;
   }
   if (!await releaseOccupiedPort()) return;
@@ -84,7 +152,7 @@ async function start() {
   const child = spawn(process.execPath, [join(packageRoot, "dist", "server.js")], {
     cwd: runtimeDir,
     detached: true,
-    env: { ...process.env, MEMORY_PORT: String(port), MEMORY_DB_PATH: join(dataDir, "memory.db") },
+    env: { ...process.env, MEMORY_PORT: String(port), MEMORY_DB_PATH: join(dataDir, "memory.db"), MEMORY_LANGUAGE: language },
     stdio: ["ignore", logFd, logFd],
   });
   child.unref();
@@ -94,30 +162,30 @@ async function start() {
     await wait(200);
     if (!isRunning(child.pid)) {
       rmSync(pidFile, { force: true });
-      throw new Error(`Memory One 启动失败，请查看日志：${logFile}`);
+      throw new Error(text.startFailed);
     }
     try {
       const response = await fetch(url);
       if (response.ok) {
-        console.log(`Memory One 已启动：${url}`);
-        console.log(`MCP：${url}mcp/`);
+        console.log(text.started(url));
+        console.log(text.mcp(url));
         return;
       }
     } catch {}
   }
-  throw new Error(`Memory One 启动超时，请查看日志：${logFile}`);
+  throw new Error(text.startTimeout);
 }
 
 async function stop() {
   const pid = currentPid();
   if (!pid) {
-    console.log("Memory One 未运行。");
+    console.log(copy().notRunning);
     return;
   }
   process.kill(pid, "SIGTERM");
   for (let attempt = 0; attempt < 25 && isRunning(pid); attempt += 1) await wait(200);
   rmSync(pidFile, { force: true });
-  console.log("Memory One 已停止。");
+  console.log(copy().stopped);
 }
 
 async function update() {
@@ -127,20 +195,20 @@ async function update() {
   const result = spawnSync(npmCommand, ["install", "--global", "@ccjr1120/memory-one@latest"], { stdio: "inherit" });
   if (result.status !== 0) {
     if (wasRunning) await start();
-    throw new Error("Memory One 更新失败。");
+    throw new Error(copy().updateFailed);
   }
-  console.log("Memory One 已更新到最新版本。");
+  console.log(copy().updated);
   if (wasRunning) await start();
 }
 
 function status() {
   const pid = currentPid();
   if (!pid) {
-    console.log("Memory One 未运行。");
+    console.log(copy().notRunning);
     process.exitCode = 1;
     return;
   }
-  console.log(`Memory One 正在运行（PID ${pid}）：${url}`);
+  console.log(copy().status(pid, url));
 }
 
 function openApp() {
@@ -148,11 +216,11 @@ function openApp() {
   const args = platform() === "win32" ? ["/c", "start", "", url] : [url];
   const child = spawn(command, args, { detached: true, stdio: "ignore" });
   child.unref();
-  console.log(`正在打开 ${url}`);
+  console.log(copy().opening);
 }
 
 function help() {
-  console.log(`Memory One\n\n用法：\n  memoryone start   启动本地服务\n  memoryone stop    停止本地服务\n  memoryone status  查看运行状态\n  memoryone open    打开工作台\n  memoryone update  更新到最新版本`);
+  console.log(copy().help);
 }
 
 const command = process.argv[2];
