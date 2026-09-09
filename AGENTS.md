@@ -48,6 +48,10 @@ Codex global guidance must only be installed through an explicit user action in 
 
 When the user corrects agent behavior or states a durable repository-specific working preference, update this `AGENTS.md` in the same change so future work follows that correction.
 
+## Product Independence
+
+Memory One product and runtime capabilities must be implemented entirely within Memory One. Do not use `AGENTS.md` as part of preference recall, persistent preferences, or any other product behavior. `AGENTS.md` only guides agents contributing to this repository.
+
 ## Git Worktree Directory Rule
 
 Place additional worktrees in the parent directory of the primary checkout. Name each worktree as `../<repository-name>-<purpose>`.

@@ -37,7 +37,7 @@ Fastify 应用服务器 (8765)
 
 | 工具 | 输入 | 行为 |
 | --- | --- | --- |
-| `memory_get_context` | `query?`, `scope?`, `limit` 默认 10 | 项目 scope 联合召回项目与全局记忆；省略 scope 仅召回全局；每项任务开始调用一次 |
+| `memory_get_context` | `query?`, `scope?`, `limit` 默认 10 | 优先固定返回 `metadata.always_include=true` 的常驻偏好，再按相关性召回条件偏好和其他记忆；项目 scope 联合召回项目与全局记忆；省略 scope 仅召回全局；每项任务开始调用一次 |
 | `memory_search` | `query`, `scope?`, `limit` 默认 20 | FTS 搜索并记录召回 |
 | `memory_store` | `content`, `kind?`, `scope?`, `confidence?`, `importance?`, `metadata?` 等 | 创建，默认 kind=`fact`、confidence=1、importance=.5 |
 | `memory_get` | `memory_id` | 返回单项；不存在返回 `memory_not_found` |

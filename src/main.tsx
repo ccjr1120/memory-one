@@ -269,6 +269,10 @@ const ui = {
     scopeOptional: "可选，例如：/path/to/project",
     sourcePlaceholder: "例如：Claude Code / 手动添加",
     writeLocal: "写入本地 SQLite",
+    preferenceRecall: "召回方式",
+    persistentPreference: "常驻偏好",
+    conditionalPreference: "条件偏好",
+    persistentPreferenceHint: "每次任务开始时固定返回",
     cancel: "取消",
     save: "保存记忆",
     languageCode: "EN",
@@ -355,7 +359,7 @@ const ui = {
     navAll: "All memories", navTimeline: "Timeline", navArchive: "Archive", navPreferences: "Preferences", navScopes: "Scopes", navTags: "Tags", navMcp: "MCP service", navSettings: "Settings",
     localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or create a memory.", loadFailed: "Could not load memories", retry: "Retry", noArchive: "No archived memories", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
     languageName: "English", languageTitle: "Interface language", languageDescription: "Choose the language used by the workspace.", languageZh: "中文", languageEn: "English", languageSaved: "Language updated", languageSaveFailed: "Could not update language. Try again.", setupTitle: "Choose a language", setupDescription: "Choose a language for the workspace. You can change it later in Settings.", continue: "Continue", savedNote: "Saved", savedCount: "Saved", openMenu: "Open menu", toggleLight: "Switch to light mode", toggleDark: "Switch to dark mode", storageNote: "Memories stay on this device.", savedMemories: "Saved", countMemories: " memories", recallTimes: " recalls",
-    newMemoryEyebrow: "New memory", composerTitle: "Save a memory", content: "Memory", contentPlaceholder: "For example: The user prefers a concise interface.", type: "Type", scopeOptional: "Optional, for example: /path/to/project", sourcePlaceholder: "For example: Claude Code / Manual", writeLocal: "Save locally", cancel: "Cancel", save: "Save memory", mcpKicker: "Agent integration", mcpTitle: "Connect your agent", mcpDescription: "Expose Memory One through Streamable HTTP. Create a scoped key and add it to your MCP client.", mcpOnline: "HTTP online", mcpEndpoint: "Service address", mcpCopyEndpoint: "Copy service address", transport: "Transport", auth: "Authentication", noAuth: "Bearer Key required", category: "Memory scope", categoryValue: "Global / optional scope", toolsLabel: "Available tools", toolsTitle: "Tools available to agents", toolsCount: "tools", http: "HTTP", localMemory: "LOCAL MEMORY / 01", serverEndpoint: "Service endpoint", versionNotice: (latest: string, current: string) => `New version ${latest}; current version ${current}`, callCount: "calls",
+    newMemoryEyebrow: "New memory", composerTitle: "Save a memory", content: "Memory", contentPlaceholder: "For example: The user prefers a concise interface.", type: "Type", scopeOptional: "Optional, for example: /path/to/project", sourcePlaceholder: "For example: Claude Code / Manual", writeLocal: "Save locally", preferenceRecall: "Recall mode", persistentPreference: "Persistent preference", conditionalPreference: "Conditional preference", persistentPreferenceHint: "Always returned at the start of every task", cancel: "Cancel", save: "Save memory", mcpKicker: "Agent integration", mcpTitle: "Connect your agent", mcpDescription: "Expose Memory One through Streamable HTTP. Create a scoped key and add it to your MCP client.", mcpOnline: "HTTP online", mcpEndpoint: "Service address", mcpCopyEndpoint: "Copy service address", transport: "Transport", auth: "Authentication", noAuth: "Bearer Key required", category: "Memory scope", categoryValue: "Global / optional scope", toolsLabel: "Available tools", toolsTitle: "Tools available to agents", toolsCount: "tools", http: "HTTP", localMemory: "LOCAL MEMORY / 01", serverEndpoint: "Service endpoint", versionNotice: (latest: string, current: string) => `New version ${latest}; current version ${current}`, callCount: "calls",
     appearance: "Appearance",
     appearanceEyebrow: "APPEARANCE",
     darkMode: "Dark mode",
@@ -483,18 +487,15 @@ function App() {
   }, [language]);
   useEffect(() => {
     let active = true;
-    let timer: number | undefined;
     void fetch("/api/version")
       .then((response) => response.ok ? response.json() as Promise<{ current?: string; latest?: string | null; updateAvailable?: boolean }> : null)
       .then((version) => {
         if (!active || !version?.updateAvailable || !version.current || !version.latest) return;
         setVersionNotice({ current: version.current, latest: version.latest });
-        timer = window.setTimeout(() => setVersionNotice(null), 3000);
       })
       .catch(() => undefined);
     return () => {
       active = false;
-      if (timer) window.clearTimeout(timer);
     };
   }, []);
   useEffect(() => {
@@ -554,6 +555,7 @@ function App() {
     kind: string;
     project: string;
     source: string;
+    alwaysInclude: boolean;
   }) => {
     const response = await fetch("/api/memories", {
       method: "POST",
@@ -562,6 +564,7 @@ function App() {
         ...payload,
         project: payload.project || null,
         source: payload.source || null,
+        metadata: payload.kind === "preference" && payload.alwaysInclude ? { always_include: true } : {},
       }),
     });
     const memory = await response.json();
@@ -575,6 +578,14 @@ function App() {
         <div className="version-notice" role="status">
           <Sparkles size={14} />
           <span>{copy.versionNotice(versionNotice.latest, versionNotice.current)}</span>
+          <button
+            className="icon-button"
+            onClick={() => setVersionNotice(null)}
+            title={copy.close}
+            aria-label={copy.close}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
@@ -1588,6 +1599,9 @@ function MemoryDetail({
       <div className={`detail-kind kind-badge kind-${item.kind}`}>
         {labels[item.kind] ?? item.kind}
       </div>
+      {item.kind === "preference" && item.metadata.always_include === true && (
+        <div className="detail-kind kind-badge">{copy.persistentPreference}</div>
+      )}
       <h2>{item.content}</h2>
       <div className="detail-meta">
         <div>
@@ -1771,6 +1785,7 @@ function Composer({
     kind: string;
     project: string;
     source: string;
+    alwaysInclude: boolean;
   }) => void;
   language: Language;
 }) {
@@ -1780,6 +1795,7 @@ function Composer({
   const [kind, setKind] = useState("fact");
   const [project, setProject] = useState("");
   const [source, setSource] = useState("");
+  const [alwaysInclude, setAlwaysInclude] = useState(false);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1836,6 +1852,21 @@ function Composer({
             />
           </label>
         </div>
+        {kind === "preference" && (
+          <label>
+            {copy.preferenceRecall}
+            <Select
+              value={alwaysInclude ? "persistent" : "conditional"}
+              onValueChange={(value) => setAlwaysInclude(value === "persistent")}
+              options={[
+                { value: "conditional", label: copy.conditionalPreference },
+                { value: "persistent", label: `${copy.persistentPreference} · ${copy.persistentPreferenceHint}` },
+              ]}
+              ariaLabel={copy.preferenceRecall}
+              className="composer-select"
+            />
+          </label>
+        )}
         <label>
           {copy.source}
           <input
@@ -1856,7 +1887,7 @@ function Composer({
             <button
               className="primary-button"
               disabled={!content.trim()}
-              onClick={() => onCreate({ content, kind, project, source })}
+              onClick={() => onCreate({ content, kind, project, source, alwaysInclude })}
             >
               {copy.save} <ArrowUpRight size={15} />
             </button>

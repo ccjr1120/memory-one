@@ -312,28 +312,39 @@ export class MemoryStore {
     const terms = query ? searchTerms(query) : [];
     const ftsQuery = terms.map(quoteFtsTerm).join(" OR ");
     const params = { query: ftsQuery, scope, project, limit: max, ...likeParams(terms) };
+    const persistentRows = this.db.prepare(`SELECT m.* FROM memories m
+      WHERE m.scope = @scope AND ${projectFilter} AND m.kind = 'preference' AND m.deleted_at IS NULL
+        AND json_extract(m.metadata_json, '$.always_include') = 1
+      ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, m.importance DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all(params) as Record<string, unknown>[];
+    const persistentIds = new Set(persistentRows.map((row) => String(row.id)));
+    const relevantLimit = Math.max(0, max - persistentRows.length);
     let rows: unknown[] = [];
-    if (ftsQuery) {
+    if (relevantLimit && ftsQuery) {
+      const relevantParams = { ...params, limit: relevantLimit };
       try {
         rows = this.db.prepare(`SELECT m.*, bm25(memories_fts) AS score
           FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
           WHERE memories_fts MATCH @query AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
-          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, score LIMIT @limit`).all(params) as unknown[];
+            AND NOT (m.kind = 'preference' AND json_extract(m.metadata_json, '$.always_include') = 1)
+          ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, score LIMIT @limit`).all(relevantParams) as unknown[];
       } catch {
         rows = [];
       }
       if (!rows.length) {
         rows = this.db.prepare(`SELECT m.* FROM memories m
           WHERE (${likeWhere(terms)}) AND m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
+            AND NOT (m.kind = 'preference' AND json_extract(m.metadata_json, '$.always_include') = 1)
           ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, ${likeScore(terms)} DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
-          .all(params) as unknown[];
+          .all(relevantParams) as unknown[];
       }
-    } else {
+    } else if (relevantLimit && !ftsQuery) {
       rows = this.db.prepare(`SELECT m.* FROM memories m
         WHERE m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
-        ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all(params) as unknown[];
+          AND NOT (m.kind = 'preference' AND json_extract(m.metadata_json, '$.always_include') = 1)
+        ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`).all({ ...params, limit: relevantLimit }) as unknown[];
     }
-    return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
+    const relevantRows = (rows as Record<string, unknown>[]).filter((row) => !persistentIds.has(String(row.id)));
+    return [...persistentRows, ...relevantRows].slice(0, max).map((row) => this.decode(row));
   }
 
   recordRecalls(memories: Memory[]): Memory[] {
