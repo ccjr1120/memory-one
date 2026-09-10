@@ -89,6 +89,7 @@ After publishing a concrete version, wait until `npm view @ccjr1120/memory-one@<
 - The user-facing web UI supports Chinese and English. On first install or first start, let the user choose a language; the choice can be changed from Web settings.
 - Keep buttons, labels, and explanatory copy restrained. Do not expose unrelated internal implementation details in user-facing messages.
 - Display user-authored memory content exactly as entered; do not translate it.
+- The Settings navigation item must always show the installed package version, including npm-installed runs; initialize it from the frontend build version rather than depending solely on an asynchronous API request.
 - In the memory manager Agent, configuration auto-saves. Do not show footer Chat or Save Configuration buttons; while configuration is open, the header configuration icon becomes a Chat icon that returns to the conversation.
 - Agent configuration selects render in a portal and must not trigger outside-click collapse. When the Agent is expanded, the composer keeps its border but has no rounded top corners so it visually joins the chat panel.
 - Agent chat must follow the latest message while sending, show the context-loading row only until response content starts, render streaming Markdown in streaming mode, and stop provider SSE reads on terminal events instead of waiting indefinitely for the connection to close.

@@ -48,6 +48,8 @@ import "./styles.css";
 import { Streamdown } from "streamdown";
 import "streamdown/styles.css";
 
+declare const __MEMORY_ONE_VERSION__: string;
+
 type Memory = {
   id: string;
   content: string;
@@ -420,7 +422,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [versionNotice, setVersionNotice] = useState<VersionNotice | null>(null);
-  const [currentVersion, setCurrentVersion] = useState("");
+  const [currentVersion, setCurrentVersion] = useState(__MEMORY_ONE_VERSION__);
   const [languageReady, setLanguageReady] = useState(false);
   const load = async (search = query) => {
     setLoading(true);
