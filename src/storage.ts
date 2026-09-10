@@ -184,6 +184,25 @@ export class MemoryStore {
         updated_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_agent_messages_created ON agent_messages(created_at);
+      CREATE TABLE IF NOT EXISTS agent_executions (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed', 'cancelled')),
+        message_ids_json TEXT NOT NULL DEFAULT '[]',
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_executions_created ON agent_executions(created_at);
+      CREATE TABLE IF NOT EXISTS agent_execution_events (
+        execution_id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        data_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (execution_id, sequence),
+        FOREIGN KEY (execution_id) REFERENCES agent_executions(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_agent_execution_events_created ON agent_execution_events(execution_id, sequence);
       CREATE TABLE IF NOT EXISTS mcp_config (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         use_bearer_key INTEGER NOT NULL DEFAULT 1,
@@ -242,6 +261,44 @@ export class MemoryStore {
     this.db.prepare(`INSERT INTO agent_messages (id, role, content, tool_calls_json, created_at, updated_at) VALUES (@id, @role, @content, @tool_calls_json, @created_at, @updated_at)
       ON CONFLICT(id) DO UPDATE SET content = excluded.content, tool_calls_json = excluded.tool_calls_json, updated_at = excluded.updated_at`).run({ id: message.id, role: message.role, content: message.content, tool_calls_json: JSON.stringify(message.toolCalls ?? []), created_at: timestamp, updated_at: timestamp });
     return this.listAgentMessages(1000).find((item) => item.id === message.id);
+  }
+
+  createAgentExecution(input: { id?: string; messageIds?: string[] } = {}) {
+    const id = input.id ?? randomUUID();
+    const timestamp = now();
+    this.db.prepare(`INSERT INTO agent_executions (id, status, message_ids_json, error, created_at, updated_at)
+      VALUES (@id, 'running', @message_ids_json, NULL, @created_at, @updated_at)`).run({ id, message_ids_json: JSON.stringify(input.messageIds ?? []), created_at: timestamp, updated_at: timestamp });
+    return this.getAgentExecution(id);
+  }
+
+  appendAgentExecutionEvent(executionId: string, type: string, data: unknown = {}) {
+    const row = this.db.prepare("SELECT COALESCE(MAX(sequence), 0) AS sequence FROM agent_execution_events WHERE execution_id = ?").get(executionId) as { sequence: number };
+    const sequence = Number(row.sequence) + 1;
+    const timestamp = now();
+    this.db.prepare("INSERT INTO agent_execution_events (execution_id, sequence, type, data_json, created_at) VALUES (?, ?, ?, ?, ?)").run(executionId, sequence, type, JSON.stringify(data), timestamp);
+    return { id: sequence, execution_id: executionId, type, data, created_at: timestamp };
+  }
+
+  listAgentExecutionEvents(executionId: string, afterSequence = 0) {
+    return (this.db.prepare("SELECT sequence, type, data_json, created_at FROM agent_execution_events WHERE execution_id = ? AND sequence > ? ORDER BY sequence ASC").all(executionId, Math.max(0, afterSequence)) as Array<Record<string, unknown>>).map((row) => ({ id: Number(row.sequence), execution_id: executionId, type: String(row.type), data: JSON.parse(String(row.data_json ?? "{}")), created_at: String(row.created_at) }));
+  }
+
+  getAgentExecution(id: string) {
+    const row = this.db.prepare("SELECT * FROM agent_executions WHERE id = ?").get(id) as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return { id: String(row.id), status: String(row.status), messageIds: JSON.parse(String(row.message_ids_json ?? "[]")), error: row.error ? String(row.error) : null, created_at: String(row.created_at), updated_at: String(row.updated_at), messages: this.listAgentMessages(1000).filter((message) => (JSON.parse(String(row.message_ids_json ?? "[]")) as string[]).includes(message.id)) };
+  }
+
+  updateAgentExecution(id: string, patch: { status?: "running" | "completed" | "failed" | "cancelled"; messageIds?: string[]; error?: string | null }) {
+    const current = this.getAgentExecution(id);
+    if (!current) return null;
+    const timestamp = now();
+    this.db.prepare(`UPDATE agent_executions SET status = COALESCE(@status, status), message_ids_json = COALESCE(@message_ids_json, message_ids_json), error = @error, updated_at = @updated_at WHERE id = @id`).run({ id, status: patch.status ?? null, message_ids_json: patch.messageIds ? JSON.stringify(patch.messageIds) : null, error: patch.error === undefined ? current.error : patch.error, updated_at: timestamp });
+    return this.getAgentExecution(id);
+  }
+
+  listAgentExecutions(limit = 50) {
+    return (this.db.prepare("SELECT id FROM agent_executions ORDER BY created_at DESC LIMIT ?").all(Math.min(Math.max(limit, 1), 200)) as Array<{ id: string }>).map((row) => this.getAgentExecution(row.id)).filter(Boolean);
   }
 
   private rebuildFtsIfNeeded() {

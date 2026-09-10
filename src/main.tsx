@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Activity,
   Archive,
+  ArrowUp,
   ArrowUpRight,
   BookOpen,
   Bot,
@@ -33,7 +34,6 @@ import {
   MessageCircle,
   Moon,
   Pencil,
-  Plus,
   Search,
   Send,
   Server,
@@ -229,7 +229,7 @@ const ui = {
     sortGrouped: "按 Scope 分组",
     globalMemory: "全局记忆",
     emptyMatch: "这里还没有匹配的记忆",
-    emptyHelp: "试试换一个关键词，或创建一条新的记忆。",
+    emptyHelp: "试试换一个关键词或调整筛选条件。",
     loadFailed: "记忆读取失败",
     retry: "重试",
     noTags: "暂无标签",
@@ -311,14 +311,14 @@ const ui = {
     darkModeDescription: "在浅色和深色界面之间切换。",
     storageEyebrow: "本地存储",
     agentName: "记忆管家",
-    agentDescription: "通过 MCP 管理你的记忆",
+    agentDescription: "基于记忆回答你的问题",
     collapse: "收起",
     agentPage: "Agent 页面",
     chat: "对话",
     configuration: "配置",
     processing: "正在处理",
     readingMemory: "正在读取记忆并生成回复",
-    agentPlaceholder: "告诉记忆管家你想做什么...",
+    agentPlaceholder: "向记忆管家提问...",
     send: "发送",
     requestFormat: "请求格式",
     chooseRequestFormat: "选择请求格式",
@@ -346,7 +346,7 @@ const ui = {
   en: {
     brandSubtitle: "Personal memory", workspace: "Workspace", collections: "Collections", connect: "Connect",
     navAll: "All memories", navTimeline: "Timeline", navPreferences: "Preferences", navScopes: "Scopes", navTags: "Tags", navMcp: "MCP service", navSettings: "Settings",
-    localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or create a memory.", loadFailed: "Could not load memories", retry: "Retry", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
+    localStorage: "Local storage", memories: "MEMORIES", scopes: "SCOPES", scopesNote: "Scope count", lastSync: "LAST SYNC", justNow: "Just now", localDatabase: "Local database", localOnly: "Local only", localOnlyDesc: "Your memories stay on this device", newMemory: "New memory", search: "Search memories...", allScopes: "All scopes", reading: "Loading...", countSuffix: " memories", sortRecent: "Sorted by recently updated", sortTimeline: "Sorted by event time", sortGrouped: "Grouped by scope", globalMemory: "Global memories", emptyMatch: "No matching memories", emptyHelp: "Try another search or adjust the filters.", loadFailed: "Could not load memories", retry: "Retry", noTags: "No tags", settingsManaged: "Managed by local settings", detailEyebrow: "Memory details", close: "Close", detailEmpty: "Select a memory", detailEmptyDesc: "View its content and metadata", confidence: "Confidence", created: "Created", updated: "Updated", source: "Source", agentWritten: "Agent", scope: "Scope", signals: "Signals", importance: "Importance", recallCount: "Recalls", times: "times", original: "View original", switchLanguage: "Switch to Chinese", languageCode: "中", timelineItems: "items",
     languageName: "English", languageTitle: "Interface language", languageDescription: "Choose the language used by the workspace.", languageZh: "中文", languageEn: "English", languageSaved: "Language updated", languageSaveFailed: "Could not update language. Try again.", setupTitle: "Choose a language", setupDescription: "Choose a language for the workspace. You can change it later in Settings.", continue: "Continue", savedNote: "Saved", savedCount: "Saved", openMenu: "Open menu", toggleLight: "Switch to light mode", toggleDark: "Switch to dark mode", storageNote: "Memories stay on this device.", savedMemories: "Saved", countMemories: " memories", recallTimes: " recalls",
     newMemoryEyebrow: "New memory", composerTitle: "Save a memory", content: "Memory", contentPlaceholder: "For example: The user prefers a concise interface.", type: "Type", scopeOptional: "Optional, for example: /path/to/project", sourcePlaceholder: "For example: Claude Code / Manual", writeLocal: "Save locally", preferenceRecall: "Recall mode", persistentPreference: "Persistent preference", conditionalPreference: "Conditional preference", persistentPreferenceHint: "Always returned at the start of every task", cancel: "Cancel", save: "Save memory", mcpKicker: "Agent integration", mcpTitle: "Connect your agent", mcpDescription: "Expose Memory One through Streamable HTTP. Create a scoped key and add it to your MCP client.", mcpOnline: "HTTP online", mcpEndpoint: "Service address", mcpCopyEndpoint: "Copy service address", transport: "Transport", auth: "Authentication", noAuth: "Bearer Key required", category: "Memory scope", categoryValue: "Global / optional scope", toolsLabel: "Available tools", toolsTitle: "Tools available to agents", toolsCount: "tools", http: "HTTP", localMemory: "LOCAL MEMORY / 01", serverEndpoint: "Service endpoint", versionNotice: (latest: string, current: string) => `New version ${latest}; current version ${current}`, callCount: "calls",
     appearance: "Appearance",
@@ -355,14 +355,14 @@ const ui = {
     darkModeDescription: "Switch between light and dark themes.",
     storageEyebrow: "STORAGE",
     agentName: "Memory assistant",
-    agentDescription: "Manage your memories through MCP",
+    agentDescription: "Answer questions using your memories",
     collapse: "Collapse",
     agentPage: "Agent page",
     chat: "Chat",
     configuration: "Configuration",
     processing: "Processing",
     readingMemory: "Reading memories and preparing a reply",
-    agentPlaceholder: "Tell the memory assistant what to do...",
+    agentPlaceholder: "Ask the memory assistant a question...",
     send: "Send",
     requestFormat: "Request format",
     chooseRequestFormat: "Choose a request format",
@@ -416,7 +416,6 @@ function App() {
   const [dark, setDark] = useState(
     () => localStorage.getItem("memory-one-theme") === "dark",
   );
-  const [showComposer, setShowComposer] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -531,28 +530,6 @@ function App() {
   const activeCopy = viewCopy[language][view];
   const selectView = (nextView: View) => {
     void navigate({ to: viewRoutes[nextView] });
-  };
-  const createMemory = async (payload: {
-    content: string;
-    kind: string;
-    project: string;
-    source: string;
-    alwaysInclude: boolean;
-  }) => {
-    const response = await fetch("/api/memories", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        project: payload.project || null,
-        source: payload.source || null,
-        metadata: payload.kind === "preference" && payload.alwaysInclude ? { always_include: true } : {},
-      }),
-    });
-    const memory = await response.json();
-    setMemories((current) => [memory, ...current]);
-    setSelected(memory);
-    setShowComposer(false);
   };
   return (
     <div className={`app-shell ${view === "mcp" ? "app-shell-wide" : ""}`}>
@@ -697,13 +674,6 @@ function App() {
                   <h1>{activeCopy.title}</h1>
                   <p>{activeCopy.description}</p>
                 </div>
-                <button
-                  className="primary-button"
-                  onClick={() => setShowComposer(true)}
-                >
-                  <Plus size={17} />
-                  {copy.newMemory}
-                </button>
               </section>
               {view !== "timeline" && <section className="stat-grid">
                 <Stat
@@ -824,6 +794,7 @@ function App() {
             </>
           )}
         </div>
+        <AgentChat language={language} onMemoryChanged={() => void load()} />
       </main>
       {view !== "mcp" && <aside className={`detail-panel ${selected ? "detail-open" : ""}`}>
         <div className="detail-header">
@@ -850,13 +821,6 @@ function App() {
           </div>
         )}
       </aside>}
-      {showComposer && (
-        <Composer
-          onClose={() => setShowComposer(false)}
-          onCreate={createMemory}
-          language={language}
-        />
-      )}
       <Outlet />
       {languageReady && languageSetup ? <LanguageSetup language={language} onSelect={(next) => saveLanguage(next)} /> : null}
     </div>
@@ -1017,9 +981,9 @@ function TimelineEvents({
                     </span>
                     <strong>{item.content}</strong>
                     <span className="timeline-event-context">
-                      {item.project ?? item.scope}
-                      <span aria-hidden="true">·</span>
-                      {item.source ?? ui[language].agentWritten}
+                      <span title={`${item.project ?? item.scope} · ${item.source ?? ui[language].agentWritten}`}>
+                        {item.project ?? item.scope} · {item.source ?? ui[language].agentWritten}
+                      </span>
                     </span>
                   </span>
                 </button>
@@ -1572,15 +1536,11 @@ function MemoryDetail({
       </div>
       <div className="detail-section">
         <span className="eyebrow">{copy.scope}</span>
-        <div className="scope-value">
+        <div className="scope-value" title={item.project ? `${item.scope} / ${item.project}` : item.scope}>
           <Database size={15} />
-          {item.scope}
-          {item.project && (
-            <>
-              <span>/</span>
-              {item.project}
-            </>
-          )}
+          <span className="scope-value-text">
+            {item.project ? `${item.scope} / ${item.project}` : item.scope}
+          </span>
         </div>
       </div>
       <div className="detail-section">
@@ -1721,130 +1681,6 @@ function SettingsPage({
   );
 }
 
-function Composer({
-  onClose,
-  onCreate,
-  language,
-}: {
-  onClose: () => void;
-  onCreate: (payload: {
-    content: string;
-    kind: string;
-    project: string;
-    source: string;
-    alwaysInclude: boolean;
-  }) => void;
-  language: Language;
-}) {
-  const copy = ui[language];
-  const labels = kindLabels[language];
-  const [content, setContent] = useState("");
-  const [kind, setKind] = useState("fact");
-  const [project, setProject] = useState("");
-  const [source, setSource] = useState("");
-  const [alwaysInclude, setAlwaysInclude] = useState(false);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div className="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
-        <div className="composer-header">
-          <div>
-            <span className="eyebrow">{copy.newMemoryEyebrow}</span>
-            <h2 id="composer-title">{copy.composerTitle}</h2>
-          </div>
-          <button className="icon-button" onClick={onClose} title={copy.close}>
-            <X size={18} />
-          </button>
-        </div>
-        <label>
-          {copy.content}
-          <textarea
-            autoFocus
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder={copy.contentPlaceholder}
-            rows={5}
-          />
-        </label>
-        <div className="composer-grid">
-          <label>
-            {copy.type}
-            <Select
-              value={kind}
-              onValueChange={setKind}
-              options={kinds
-                .slice(1)
-                .map((value) => ({ value, label: labels[value] }))}
-              ariaLabel={copy.type}
-              className="composer-select"
-            />
-          </label>
-          <label>
-            {copy.scope}
-            <input
-              value={project}
-              onChange={(event) => setProject(event.target.value)}
-              placeholder={copy.scopeOptional}
-            />
-          </label>
-        </div>
-        {kind === "preference" && (
-          <label>
-            {copy.preferenceRecall}
-            <Select
-              value={alwaysInclude ? "persistent" : "conditional"}
-              onValueChange={(value) => setAlwaysInclude(value === "persistent")}
-              options={[
-                { value: "conditional", label: copy.conditionalPreference },
-                { value: "persistent", label: `${copy.persistentPreference} · ${copy.persistentPreferenceHint}` },
-              ]}
-              ariaLabel={copy.preferenceRecall}
-              className="composer-select"
-            />
-          </label>
-        )}
-        <label>
-          {copy.source}
-          <input
-            value={source}
-            onChange={(event) => setSource(event.target.value)}
-            placeholder={copy.sourcePlaceholder}
-          />
-        </label>
-        <div className="composer-footer">
-          <span>
-            <Check size={14} />
-            {copy.writeLocal}
-          </span>
-          <div>
-            <button className="ghost-button" onClick={onClose}>
-              {copy.cancel}
-            </button>
-            <button
-              className="primary-button"
-              disabled={!content.trim()}
-              onClick={() => onCreate({ content, kind, project, source, alwaysInclude })}
-            >
-              {copy.save} <ArrowUpRight size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 type AgentMessage = {
   id: string;
   role: "user" | "assistant";
@@ -1899,7 +1735,6 @@ function AgentConfigForm({
   const [apiKey, setApiKey] = useState(initial.apiKey);
   const [model, setModel] = useState(initial.model);
   const [provider, setProvider] = useState(initial.provider);
-  const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [modelsBusy, setModelsBusy] = useState(false);
@@ -1924,9 +1759,7 @@ function AgentConfigForm({
       const result = (await response.json()) as Partial<AgentSettings> & { base_url?: string; api_key?: string; auto_context?: boolean; detail?: string };
       if (!response.ok) throw new Error(result.detail || "agent_config_save_failed");
       const next = toAgentSettings(result);
-      setSaved(true);
       await onSaved(next);
-      window.setTimeout(() => setSaved(false), 1800);
     } catch {
       setModelMessage(copy.configSaveFailed);
     } finally {
@@ -1955,6 +1788,11 @@ function AgentConfigForm({
       setModelsBusy(false);
     }
   };
+  useEffect(() => {
+    if (!baseUrl.trim() && !apiKey.trim() && !model.trim() && !provider.trim()) return;
+    const timer = window.setTimeout(() => { void save(); }, 500);
+    return () => window.clearTimeout(timer);
+  }, [baseUrl, apiKey, model, provider]);
   return (
     <form className="agent-config-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <div className="agent-config-scroll">
@@ -1967,220 +1805,117 @@ function AgentConfigForm({
           </div>
         </section>
       </div>
-      <div className="agent-config-actions"><button className="primary-button" type="submit" disabled={saving}>{saving ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}{saving ? copy.saving : saved ? copy.saved : copy.saveConfiguration}</button></div>
     </form>
   );
 }
 
 function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () => void; language?: Language }) {
   const copy = ui[language];
-  const welcomeMessage: AgentMessage = {
-    id: "welcome",
-    role: "assistant",
-    content: copy.welcome,
-  };
+  const welcomeMessage: AgentMessage = { id: "welcome", role: "assistant", content: copy.welcome };
   const [settings, setSettings] = useState<AgentSettings>(defaultAgentSettings);
   const [tab, setTab] = useState<"chat" | "config">("config");
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [messages, setMessages] = useState<AgentMessage[]>([welcomeMessage]);
   const [draft, setDraft] = useState("");
-  const [activeRequests, setActiveRequests] = useState(0);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [activeTool, setActiveTool] = useState<string | null>(null);
   const [streamingId, setStreamingId] = useState<string | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
-  const messagesRef = useRef<AgentMessage[]>(messages);
+  const [showHistory, setShowHistory] = useState(false);
+  const panelRef = useRef<HTMLElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const configured = isAgentConfigured(settings);
-  const sending = activeRequests > 0;
-
-  const persistMessage = async (message: AgentMessage) => {
-    await fetch("/api/agent/messages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: message.id, role: message.role, content: message.content, toolCalls: message.toolCalls ?? [] }) });
-  };
-
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/agent/config")
-      .then(async (response) => {
-        if (!response.ok) throw new Error("agent_config_load_failed");
-        return (await response.json()) as Partial<AgentSettings> & { base_url?: string; api_key?: string; auto_context?: boolean };
-      })
-      .then((result) => {
-        if (!active) return;
-        const next = toAgentSettings(result);
-        setSettings(next);
-        setTab(isAgentConfigured(next) ? "chat" : "config");
-      })
-      .catch(() => undefined)
-      .finally(() => { if (active) setSettingsLoaded(true); });
+    void fetch("/api/agent/config").then(async (response) => {
+      if (!response.ok) throw new Error("config");
+      return await response.json() as Partial<AgentSettings> & { base_url?: string; api_key?: string; auto_context?: boolean };
+    }).then((value) => {
+      if (!active) return;
+      const next = toAgentSettings(value);
+      setSettings(next);
+      setTab(isAgentConfigured(next) ? "chat" : "config");
+    }).catch(() => undefined).finally(() => { if (active) setSettingsLoaded(true); });
     return () => { active = false; };
   }, []);
-
   useEffect(() => {
     void fetch("/api/agent/messages").then((response) => response.ok ? response.json() : []).then((value: AgentMessage[]) => {
       if (Array.isArray(value) && value.length) setMessages(value);
     }).catch(() => undefined);
   }, []);
-
   useEffect(() => {
     if (!open) return;
-    const handleOutsidePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && panelRef.current?.contains(target)) return;
-      setOpen(false);
+    const close = (event: PointerEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (event.target instanceof Element && event.target.closest(".ui-select-content")) return;
+      if (!panelRef.current?.contains(event.target)) setOpen(false);
     };
-    document.addEventListener("pointerdown", handleOutsidePointerDown);
-    return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
   }, [open]);
+  useEffect(() => {
+    if (!open || tab !== "chat") return;
+    const frame = window.requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ block: "end" }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, busy, error, open, tab]);
 
-  const processMessage = async (content: string, userMessage: AgentMessage) => {
-    setActiveRequests((count) => count + 1);
+  const persist = (message: AgentMessage) => fetch("/api/agent/messages", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(message) }).catch(() => undefined);
+  const send = async (value = draft) => {
+    const content = value.trim();
+    if (!content || busy || !configured) return;
+    if (content.toLowerCase() === "/new") {
+      setDraft(""); setError(""); setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); return;
+    }
+    setDraft(""); setError(""); setBusy(true); setActiveTool(null);
+    const user = { id: crypto.randomUUID(), role: "user" as const, content };
+    const assistant = { id: crypto.randomUUID(), role: "assistant" as const, content: "", toolCalls: [] as AgentMessage["toolCalls"] };
+    setStreamingId(assistant.id);
+    setMessages((current) => [...current, user, assistant]);
+    void persist(user); void persist(assistant);
+    const controller = new AbortController(); abortRef.current = controller;
     try {
-      const assistantId = crypto.randomUUID();
-      const assistantMessage = { id: assistantId, role: "assistant" as const, content: "", toolCalls: [] };
-      setMessages((current) => [...current, assistantMessage]);
-      void persistMessage(assistantMessage);
-      setStreamingId(assistantId);
-      let assistantContent = "";
-      const response = await fetch("/api/agent/stream", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message: content, user_message_id: userMessage.id, assistant_message_id: assistantId, provider: settings.provider, model: settings.model, base_url: settings.baseUrl || null, api_key: settings.apiKey || null, scope: settings.scope || null, auto_context: settings.autoContext, history: [...messagesRef.current, userMessage].slice(-12).map(({ role, content: text }) => ({ role, content: text })) }),
-      });
+      const response = await fetch("/api/agent/stream", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ message: content, user_message_id: user.id, assistant_message_id: assistant.id, provider: settings.provider, model: settings.model, base_url: settings.baseUrl || null, api_key: settings.apiKey || null, scope: settings.scope || null, auto_context: settings.autoContext, history: [...messages, user].slice(-12).map(({ role, content: text }) => ({ role, content: text })) }) });
       if (!response.ok || !response.body) throw new Error("agent_request_failed");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const toolCalls: NonNullable<AgentMessage["toolCalls"]> = [];
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let tools: NonNullable<AgentMessage["toolCalls"]> = [];
       while (true) {
         const { value, done } = await reader.read();
         buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
         const chunks = buffer.split(/\r?\n\r?\n/); buffer = chunks.pop() ?? "";
         for (const chunk of chunks) {
           const eventName = chunk.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
-          const dataLine = chunk.split(/\r?\n/).find((line) => line.startsWith("data:")); if (!dataLine) continue;
-          const data = JSON.parse(dataLine.slice(5).trim());
-          if (eventName === "delta") { assistantContent += String(data.text ?? ""); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: assistantContent } : item)); }
-          else if (eventName === "tool") { toolCalls.push(data as NonNullable<AgentMessage["toolCalls"]>[number]); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: [...toolCalls] } : item)); }
-          else if (eventName === "error") throw new Error(String(data.detail ?? "agent_request_failed"));
-          else if (eventName === "done") setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: Array.isArray(data.toolCalls) ? data.toolCalls : toolCalls } : item));
+          const line = chunk.split(/\r?\n/).find((item) => item.startsWith("data:")); if (!line) continue;
+          const data = JSON.parse(line.slice(5).trim()) as Record<string, unknown>;
+          if (eventName === "delta") { text += String(data.text ?? ""); setActiveTool(null); setMessages((current) => current.map((item) => item.id === assistant.id ? { ...item, content: text } : item)); }
+          if (eventName === "tool") { const tool = data as unknown as NonNullable<AgentMessage["toolCalls"]>[number]; tools = [...tools, tool]; setActiveTool(String(data.label ?? data.name ?? "tool")); setMessages((current) => current.map((item) => item.id === assistant.id ? { ...item, toolCalls: tools } : item)); }
+          if (eventName === "error") throw new Error(String(data.detail ?? "agent_request_failed"));
+          if (eventName === "done") tools = Array.isArray(data.toolCalls) ? data.toolCalls as NonNullable<AgentMessage["toolCalls"]> : tools;
         }
         if (done) break;
       }
-      setStreamingId(null); void persistMessage({ id: assistantId, role: "assistant", content: assistantContent, toolCalls });
-      if (toolCalls.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
+      void persist({ ...assistant, content: text, toolCalls: tools });
+      setMessages((current) => current.map((item) => item.id === assistant.id ? { ...item, content: text, toolCalls: tools } : item));
+      if (tools.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
     } catch (caught) {
-      setStreamingId(null); const detail = caught instanceof Error ? caught.message : "";
-      setError(detail === "missing_base_url" ? copy.missingBaseUrl : detail === "missing_api_key" ? copy.missingApiKey : detail.startsWith("provider_http_") ? copy.providerRequestFailed : copy.agentRequestFailed);
-    } finally {
-      setActiveRequests((count) => Math.max(0, count - 1));
-    }
+      if (!(caught instanceof DOMException && caught.name === "AbortError")) setError(caught instanceof Error && caught.message === "missing_api_key" ? copy.missingApiKey : copy.agentRequestFailed);
+    } finally { setBusy(false); setActiveTool(null); setStreamingId(null); abortRef.current = null; }
   };
-
-  const send = (value = draft) => {
-    const content = value.trim();
-    if (!content || !configured) return;
-    if (content.toLowerCase() === "/new") {
-      setDraft("");
-      setError("");
-      setStreamingId(null);
-      setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]);
-      return;
-    }
-    setDraft("");
-    setError("");
-    const userMessage = { id: crypto.randomUUID(), role: "user" as const, content };
-    setMessages((current) => [...current, userMessage]);
-    void persistMessage(userMessage);
-    void processMessage(content, userMessage);
-    /* try {
-      const assistantId = crypto.randomUUID();
-      const assistantMessage = { id: assistantId, role: "assistant" as const, content: "", toolCalls: [] };
-      setMessages((current) => [...current, assistantMessage]);
-      void persistMessage(assistantMessage);
-      setStreamingId(assistantId);
-      let assistantContent = "";
-      const response = await fetch("/api/agent/stream", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          message: content,
-          provider: settings.provider,
-          model: settings.model,
-          base_url: settings.baseUrl || null,
-          api_key: settings.apiKey || null,
-          scope: settings.scope || null,
-          auto_context: settings.autoContext,
-          history: [...messages, userMessage].slice(-12).map(({ role, content: text }) => ({ role, content: text })),
-        }),
-      });
-      if (!response.ok || !response.body) throw new Error("agent_request_failed");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      const toolCalls: NonNullable<AgentMessage["toolCalls"]> = [];
-      while (true) {
-        const { value, done } = await reader.read();
-        buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
-        const chunks = buffer.split(/\r?\n\r?\n/);
-        buffer = chunks.pop() ?? "";
-        for (const chunk of chunks) {
-          const eventName = chunk.match(/^event:\s*(.+)$/m)?.[1]?.trim() ?? "message";
-          const dataLine = chunk.split(/\r?\n/).find((line) => line.startsWith("data:"));
-          if (!dataLine) continue;
-          const data = JSON.parse(dataLine.slice(5).trim());
-          if (eventName === "delta") {
-            assistantContent += String(data.text ?? "");
-            setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, content: assistantContent } : item));
-          }
-          else if (eventName === "tool") { toolCalls.push(data as NonNullable<AgentMessage["toolCalls"]>[number]); setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: [...toolCalls] } : item)); }
-          else if (eventName === "error") throw new Error(String(data.detail ?? "agent_request_failed"));
-          else if (eventName === "done") { const finalCalls = Array.isArray(data.toolCalls) ? data.toolCalls : toolCalls; setMessages((current) => current.map((item) => item.id === assistantId ? { ...item, toolCalls: finalCalls } : item)); }
-        }
-        if (done) break;
-      }
-      setStreamingId(null);
-      void persistMessage({ id: assistantId, role: "assistant", content: assistantContent, toolCalls });
-      if (toolCalls.some((tool) => ["memory_store", "memory_update", "memory_delete"].includes(tool.name))) onMemoryChanged();
-    } catch (caught) {
-      setStreamingId(null);
-      const detail = caught instanceof Error ? caught.message : "";
-      setError(detail === "missing_base_url" ? copy.missingBaseUrl : detail === "missing_api_key" ? copy.missingApiKey : detail.startsWith("provider_http_") ? copy.providerRequestFailed : copy.agentRequestFailed);
-    } finally { setActiveRequests((count) => Math.max(0, count - 1)); }
-    */
-  };
-  const suggestions = [copy.suggestionTraits, copy.suggestionProjects, copy.suggestionConcise, "/new"];
-  const openAgent = () => { setTab(isAgentConfigured(settings) ? "chat" : "config"); setOpen(true); };
   const streamingMessage = streamingId ? messages.find((message) => message.id === streamingId) : null;
-  return (
-    <div className={`agent-float ${open ? "agent-float-open" : ""}`}>
-      <div className="agent-float-position">
-        {!open && <button className="agent-float-button" onClick={openAgent} title={copy.openAgent} aria-label={copy.openAgent} disabled={!settingsLoaded}><Bot size={21} /></button>}
-        {open && <section ref={panelRef} className="agent-panel" aria-label={settings.name}>
-          <header className="agent-header">
-            <div className="agent-title"><span className="agent-avatar"><Brain size={17} /></span><div><strong>{settings.name}</strong><span>{copy.agentDescription}</span></div></div>
-            <button className="icon-button" onClick={() => setOpen(false)} title={copy.collapse} aria-label={copy.collapse}><ChevronDown size={18} /></button>
-          </header>
-          <div className="agent-tabs" role="tablist" aria-label={copy.agentTabs}>
-            <button role="tab" aria-selected={tab === "chat"} className={tab === "chat" ? "active" : ""} disabled={!configured} onClick={() => setTab("chat")}><MessageCircle size={14} />{copy.chat}</button>
-            <button role="tab" aria-selected={tab === "config"} className={tab === "config" ? "active" : ""} onClick={() => setTab("config")}><Settings2 size={14} />{copy.configuration}</button>
-          </div>
-          {tab === "config" ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); setTab(isAgentConfigured(next) ? "chat" : "config"); }} /> : <>
-            <div className="agent-messages">
-              {messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>
-                {message.role === "user" || message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}
-                {message.toolCalls?.length ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory_get_context" || (tool.count ?? 0) > 0).map((tool, index) => <span key={`${message.id}-tool-${index}`}><Check size={11} />{tool.label}{tool.count !== undefined ? ` · ${tool.count}` : ""}</span>)}</div> : null}
-              </article>)}
-              {sending && !streamingMessage?.content && <div className="agent-thinking" role="status" aria-label={copy.processing}><LoaderCircle size={14} /><span className="agent-thinking-label">{copy.readingMemory}</span><i /><i /><i /></div>}
-              {error && <p className="agent-error" role="alert">{error}</p>}
-            </div>
-            <div className="agent-suggestions">{suggestions.map((suggestion) => <button key={suggestion} onClick={() => void send(suggestion)}>{suggestion}</button>)}</div>
-            <form className="agent-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={copy.agentPlaceholder} rows={1} /><button className="agent-send" type="submit" disabled={!draft.trim()} title={copy.send}><Send size={17} /></button></form>
-          </>}
-        </section>}
+  const suggestions = [copy.suggestionTraits, copy.suggestionProjects, copy.suggestionConcise];
+  const composer = <form className="agent-lite-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onFocus={() => setOpen(true)} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={copy.agentPlaceholder} rows={1} /><div className="agent-lite-actions"><button type="button" className="agent-lite-tool" onClick={() => setShowHistory((value) => !value)} title={copy.newMemory}><Clock3 size={15} /></button><button className="agent-lite-submit" type="submit" disabled={!draft.trim() || busy || !configured} title={busy ? copy.cancel : copy.send} onClick={busy ? (event) => { event.preventDefault(); abortRef.current?.abort(); } : undefined}>{busy ? <X size={16} /> : <ArrowUp size={16} />}</button></div></form>;
+  if (!settingsLoaded) return <div className="agent-lite-root"><section ref={panelRef} className="agent-lite-panel" aria-label={settings.name}>{composer}</section></div>;
+  return <div className={`agent-lite-root ${open ? "is-open" : ""}`}>
+    <section ref={panelRef} className="agent-lite-panel" aria-label={settings.name}>
+      <div className="agent-lite-expanded" aria-hidden={!open}>
+        <header className="agent-lite-header"><div className="agent-lite-brand"><span className="agent-avatar"><Brain size={16} /></span><div><strong>{settings.name}</strong><span>{busy ? (activeTool || copy.processing) : copy.agentDescription}</span></div></div><div className="agent-lite-header-actions"><button className="icon-button" onClick={() => setTab(tab === "config" ? "chat" : "config")} title={tab === "config" ? copy.chat : copy.configuration} aria-label={tab === "config" ? copy.chat : copy.configuration}>{tab === "config" ? <MessageCircle size={15} /> : <Settings2 size={15} />}</button><button className="icon-button" onClick={() => setOpen(false)} title={copy.close}><ChevronDown size={16} /></button></div></header>
+        <div className="agent-lite-body">{tab === "config" ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); }} /> : <><div className="agent-lite-messages">{messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>{message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown className="agent-markdown" controls={false} mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}{message.toolCalls?.some((tool) => tool.name !== "memory_get_context") ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory_get_context").map((tool, index) => <span key={`${message.id}-${index}`}><Check size={11} />{tool.label}</span>)}</div> : null}</article>)}{busy && !streamingMessage?.content && <div className="agent-thinking"><LoaderCircle size={14} /><span className="agent-thinking-label">{activeTool || copy.readingMemory}</span><i /><i /><i /></div>}{error && <p className="agent-error">{error}</p>}<div ref={messagesEndRef} className="agent-messages-end" /></div><div className="agent-lite-suggestions">{suggestions.map((item) => <button key={item} onClick={() => void send(item)} disabled={busy}>{item}</button>)}</div></>}</div>
       </div>
-    </div>
-  );
+      {composer}
+      {showHistory ? <div className="agent-lite-popover"><button type="button" onClick={() => { setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); setDraft(""); setError(""); setShowHistory(false); }}>{copy.newMemory}</button><span>/new</span></div> : null}
+    </section>
+  </div>;
 }
 
 createRoot(document.getElementById("root")!).render(

@@ -89,3 +89,9 @@ After publishing a concrete version, wait until `npm view @ccjr1120/memory-one@<
 - The user-facing web UI supports Chinese and English. On first install or first start, let the user choose a language; the choice can be changed from Web settings.
 - Keep buttons, labels, and explanatory copy restrained. Do not expose unrelated internal implementation details in user-facing messages.
 - Display user-authored memory content exactly as entered; do not translate it.
+- In the memory manager Agent, configuration auto-saves. Do not show footer Chat or Save Configuration buttons; while configuration is open, the header configuration icon becomes a Chat icon that returns to the conversation.
+- Agent configuration selects render in a portal and must not trigger outside-click collapse. When the Agent is expanded, the composer keeps its border but has no rounded top corners so it visually joins the chat panel.
+- Agent chat must follow the latest message while sending, show the context-loading row only until response content starts, render streaming Markdown in streaming mode, and stop provider SSE reads on terminal events instead of waiting indefinitely for the connection to close.
+- The Agent may use `memory_get_context` internally, but the automatic context retrieval must not be rendered as a persistent tool-call chip in the conversation.
+- The workspace must not expose manual memory creation or deletion controls; memory CRUD is handled through the Agent and MCP tools. Compact metadata such as Scope paths should stay on one line and use an ellipsis instead of wrapping when space is limited.
+- The memory manager Agent answers questions by default and may automatically read relevant context. It must only create, update, or delete memories when the user explicitly asks it to remember, change, forget, or delete something; ordinary conversation and incidental details are not memory-write instructions.

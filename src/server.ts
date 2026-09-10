@@ -29,13 +29,13 @@ type AgentChatRequest = { message?: string; history?: Array<{ role: "user" | "as
 type AgentEvent = { type: "delta"; text: string } | { type: "tool"; tool: AgentToolCall } | { type: "done"; toolCalls: AgentToolCall[] };
 type ProviderMessage = Record<string, unknown>;
 
-const agentSystemPrompt = "你是 Memory One 的记忆管家。你通过 MCP 工具管理用户的长期记忆，支持记忆的搜索、读取、保存、更新、删除和反馈。请先理解用户意图，涉及记忆事实时优先调用工具，不要编造记忆。每轮都检查用户是否表达了纠正、偏好、决定、项目约定、个人事实或其他未来有用的信息：有则在最终回复前主动调用 memory_store；如果是在修正已有记忆，先读取并调用 memory_update。只有明显临时、一次性的内容才不保存。删除前必须确认目标唯一；回复使用中文，简洁但可以使用 Markdown。";
+const agentSystemPrompt = "你是 Memory One 的记忆管家，首要职责是结合已读取的相关记忆直接回答用户的问题。你可以主动搜索和读取记忆来提高回答准确性，但不得因为普通对话、提问、纠正回答、顺带提到的偏好或项目细节而新增、更新或删除记忆。只有当用户明确要求‘记住/保存’某项内容、明确要求修改某条记忆，或明确要求‘忘记/删除’某条记忆时，才调用 memory_store、memory_update 或 memory_delete。执行更新或删除前先确认目标唯一，不要编造记忆。回复使用中文，简洁但可以使用 Markdown。";
 const toolLabels: Record<string, string> = { memory_get_context: "读取相关上下文", memory_search: "搜索记忆", memory_get: "读取记忆", memory_list: "列出记忆", memory_store: "保存记忆", memory_update: "更新记忆", memory_delete: "删除记忆", memory_feedback: "记录反馈" };
 const isMemoryOverviewRequest = (message: string) => /(?:有哪些|所有记忆|全部记忆|列出(?:全部)?|查看(?:全部)?|浏览全部|总结(?:下)?(?:我的)?记忆|总结我的特点|概括我的特点|我的画像|我的偏好和特点|我的记忆(?:有什么)?特点|记忆特点)/.test(message);
 
-function sseEvent(type: string, payload: unknown) { return `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`; }
+function sseEvent(type: string, payload: unknown, id?: number) { return `${id === undefined ? "" : `id: ${id}\n`}event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`; }
 
-async function readSse(response: Response, onEvent: (event: { event: string; data: string }) => Promise<void> | void) {
+async function readSse(response: Response, onEvent: (event: { event: string; data: string }) => Promise<boolean | void> | boolean | void) {
   if (!response.body) throw new Error("provider_empty_stream");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -49,7 +49,10 @@ async function readSse(response: Response, onEvent: (event: { event: string; dat
       const lines = chunk.split(/\r?\n/);
       const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim() ?? "message";
       const data = lines.filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
-      if (data) await onEvent({ event, data });
+      if (data && await onEvent({ event, data }) === false) {
+        await reader.cancel().catch(() => undefined);
+        return;
+      }
     }
     if (done) break;
   }
@@ -73,7 +76,7 @@ async function openAiRound(config: AgentChatRequest, messages: ProviderMessage[]
   let content = "";
   const calls = new Map<number, { id: string; name: string; arguments: string }>();
   await readSse(response, ({ data }) => {
-    if (data === "[DONE]") return;
+    if (data === "[DONE]") return false;
     const chunk = JSON.parse(data);
     const delta = chunk.choices?.[0]?.delta;
     if (delta?.content) { content += delta.content; emit({ type: "delta", text: delta.content }); }
@@ -120,6 +123,7 @@ async function anthropicRound(config: AgentChatRequest, messages: ProviderMessag
   if (!response.ok) throw new Error(`provider_http_${response.status}: ${await response.text()}`);
   let content = ""; const calls: Array<{ id: string; name: string; arguments: string }> = []; let current: any = null;
   await readSse(response, ({ event, data }) => {
+    if (event === "message_stop") return false;
     const item = JSON.parse(data);
     if (event === "content_block_start" && item.content_block?.type === "tool_use") { current = { id: item.content_block.id, name: item.content_block.name, arguments: "" }; calls.push(current); }
     if (event === "content_block_delta") { if (item.delta?.type === "text_delta") { content += item.delta.text; emit({ type: "delta", text: item.delta.text }); } if (item.delta?.type === "input_json_delta" && current) current.arguments += item.delta.partial_json; }
@@ -405,8 +409,143 @@ app.delete("/api/mcp/keys/:id", async (request, reply) => {
   const { id } = request.params as { id: string };
   return { revoked: store.revokeMcpKey(id) };
 });
-/* Agent API removed. */
-/*
+function emitExecutionEvent(executionId: string, type: string, data: unknown, reply?: any) {
+  const event = store.appendAgentExecutionEvent(executionId, type, data);
+  if (reply && !reply.raw.destroyed) reply.raw.write(sseEvent(type, data, event.id));
+  return event;
+}
+
+app.get("/api/agent/config", async () => store.getAgentConfig());
+app.put("/api/agent/config", async (request, reply) => {
+  const body = (request.body as Partial<AgentConfig> | undefined) ?? {};
+  return reply.send(store.saveAgentConfig(body));
+});
+app.get("/api/agent/messages", async () => store.listAgentMessages());
+app.post("/api/agent/messages", async (request, reply) => {
+  const body = request.body as { id?: string; role?: "user" | "assistant"; content?: string; toolCalls?: unknown[] } | undefined;
+  if (!body?.id || !body.role || typeof body.content !== "string") return reply.code(422).send({ detail: "message_required" });
+  return store.saveAgentMessage({ id: body.id, role: body.role, content: body.content, toolCalls: body.toolCalls });
+});
+app.post("/api/agent/executions", async (request, reply) => {
+  const body = (request.body as { message?: string; history?: Array<{ role: "user" | "assistant"; content: string }>; provider?: string; model?: string; base_url?: string | null; api_key?: string | null; scope?: string | null; auto_context?: boolean } | undefined) ?? {};
+  if (!body.message?.trim()) return reply.code(422).send({ detail: "message_required" });
+  const userMessageId = randomUUID();
+  const assistantMessageId = randomUUID();
+  const history = (body.history ?? []).slice(-12);
+  store.saveAgentMessage({ id: userMessageId, role: "user", content: body.message });
+  store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content: "", toolCalls: [] });
+  const execution = store.createAgentExecution({ messageIds: [userMessageId, assistantMessageId] });
+  const turn = agentTurnQueue.then(async () => {
+    let content = "";
+    let toolCalls: AgentToolCall[] = [];
+    try {
+      await runAgent({ ...body, history }, (event) => {
+        if (event.type === "delta") content += event.text;
+        if (event.type === "tool") toolCalls = [...toolCalls, event.tool];
+        if (event.type === "done") toolCalls = event.toolCalls;
+        store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content, toolCalls });
+      });
+      store.updateAgentExecution(execution!.id, { status: "completed" });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "agent_request_failed";
+      store.updateAgentExecution(execution!.id, { status: "failed", error: errorMessage });
+      emitExecutionEvent(execution!.id, "status", { status: "failed", error: errorMessage });
+    }
+  });
+  agentTurnQueue = turn.catch(() => undefined);
+  return reply.code(202).send(store.getAgentExecution(execution!.id));
+});
+
+app.get("/api/agent/executions/:executionId/events", async (request, reply) => {
+  const { executionId } = request.params as { executionId: string };
+  if (!store.getAgentExecution(executionId)) return reply.code(404).send({ detail: "execution_not_found" });
+  const header = request.headers["last-event-id"];
+  const query = request.query as { after?: string };
+  const after = Number(header ?? query.after ?? 0) || 0;
+  reply.hijack();
+  reply.raw.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no" });
+  let closed = false;
+  request.raw.on("close", () => { closed = true; });
+  const send = () => { for (const event of store.listAgentExecutionEvents(executionId, after)) if (!closed) reply.raw.write(sseEvent(event.type, event.data, event.id)); };
+  send();
+  const timer = setInterval(() => { if (closed) { clearInterval(timer); return; } send(); }, 250);
+  request.raw.on("close", () => { clearInterval(timer); if (!reply.raw.destroyed) reply.raw.end(); });
+});
+
+app.get("/api/agent/executions/:executionId", async (request, reply) => {
+  const { executionId } = request.params as { executionId: string };
+  const execution = store.getAgentExecution(executionId);
+  return execution ? execution : reply.code(404).send({ detail: "execution_not_found" });
+});
+
+app.post("/api/agent/executions/:executionId/messages", async (request, reply) => {
+  const { executionId } = request.params as { executionId: string };
+  const execution = store.getAgentExecution(executionId);
+  const body = (request.body as AgentChatRequest | undefined) ?? {};
+  if (!execution) return reply.code(404).send({ detail: "execution_not_found" });
+  if (execution.status !== "completed" && execution.status !== "failed" && execution.status !== "cancelled") return reply.code(409).send({ detail: "execution_in_progress" });
+  if (!body.message?.trim()) return reply.code(422).send({ detail: "message_required" });
+  const userMessageId = randomUUID();
+  const assistantMessageId = randomUUID();
+  store.saveAgentMessage({ id: userMessageId, role: "user", content: body.message });
+  store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content: "", toolCalls: [] });
+  store.updateAgentExecution(executionId, { status: "running", messageIds: [...execution.messageIds, userMessageId, assistantMessageId], error: null });
+  const history = [...execution.messages, { id: userMessageId, role: "user" as const, content: body.message }].slice(-12).map((message) => ({ role: message.role, content: message.content }));
+  const turn = agentTurnQueue.then(async () => {
+    let content = ""; let toolCalls: AgentToolCall[] = [];
+    try {
+      await runAgent({ ...body, history }, (event) => { if (event.type === "delta") content += event.text; if (event.type === "tool") toolCalls = [...toolCalls, event.tool]; if (event.type === "done") toolCalls = event.toolCalls; store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content, toolCalls }); });
+      store.updateAgentExecution(executionId, { status: "completed" });
+    } catch (error) { store.updateAgentExecution(executionId, { status: "failed", error: error instanceof Error ? error.message : "agent_request_failed" }); }
+  });
+  agentTurnQueue = turn.catch(() => undefined);
+  return reply.code(202).send(store.getAgentExecution(executionId));
+});
+
+app.post("/api/agent/executions/:executionId/cancel", async (request, reply) => {
+  const { executionId } = request.params as { executionId: string };
+  const execution = store.getAgentExecution(executionId);
+  if (!execution) return reply.code(404).send({ detail: "execution_not_found" });
+  if (execution.status === "running") { store.updateAgentExecution(executionId, { status: "cancelled" }); emitExecutionEvent(executionId, "status", { status: "cancelled" }); }
+  return store.getAgentExecution(executionId);
+});
+
+app.post("/api/agent/executions/:executionId/retry", async (request, reply) => {
+  const { executionId } = request.params as { executionId: string };
+  const execution = store.getAgentExecution(executionId);
+  if (!execution) return reply.code(404).send({ detail: "execution_not_found" });
+  if (execution.status === "running") return reply.code(409).send({ detail: "execution_in_progress" });
+  const lastUser = [...execution.messages].reverse().find((message) => message.role === "user");
+  if (!lastUser) return reply.code(422).send({ detail: "message_required" });
+  const body = (request.body as Omit<AgentChatRequest, "message" | "history"> | undefined) ?? {};
+  const messageIds = [...execution.messageIds, randomUUID(), randomUUID()];
+  const userMessageId = messageIds.at(-2)!;
+  const assistantMessageId = messageIds.at(-1)!;
+  store.saveAgentMessage({ id: userMessageId, role: "user", content: lastUser.content });
+  store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content: "", toolCalls: [] });
+  store.updateAgentExecution(executionId, { status: "running", messageIds, error: null });
+  const history = [...execution.messages.filter((message) => message.id !== lastUser.id), { role: "user" as const, content: lastUser.content }].slice(-12).map((message) => ({ role: message.role, content: message.content }));
+  const turn = agentTurnQueue.then(async () => {
+    let content = ""; let toolCalls: AgentToolCall[] = [];
+    try {
+      await runAgent({ ...body, message: lastUser.content, history }, (event) => { if (event.type === "delta") content += event.text; if (event.type === "tool") toolCalls = [...toolCalls, event.tool]; if (event.type === "done") toolCalls = event.toolCalls; store.saveAgentMessage({ id: assistantMessageId, role: "assistant", content, toolCalls }); });
+      store.updateAgentExecution(executionId, { status: "completed" });
+    } catch (error) { store.updateAgentExecution(executionId, { status: "failed", error: error instanceof Error ? error.message : "agent_request_failed" }); }
+  });
+  agentTurnQueue = turn.catch(() => undefined);
+  return reply.code(202).send(store.getAgentExecution(executionId));
+});
+
+app.post("/api/agent/chat", async (request, reply) => {
+  try {
+    let text = ""; const toolCalls: AgentToolCall[] = [];
+    await runAgent((request.body as AgentChatRequest | undefined) ?? {}, (event) => { if (event.type === "delta") text += event.text; if (event.type === "done") toolCalls.push(...event.toolCalls); });
+    return { reply: text, toolCalls };
+  } catch (error) {
+    request.log.error(error);
+    return reply.code(500).send({ detail: error instanceof Error ? error.message : "agent_request_failed" });
+  }
+});
 app.post("/api/agent/models", async (request, reply) => {
   const body = (request.body as { provider?: string; base_url?: string | null; api_key?: string | null } | undefined) ?? {};
   const provider = (body.provider || "").toLowerCase();
@@ -434,8 +573,6 @@ app.post("/api/agent/models", async (request, reply) => {
     return reply.code(502).send({ detail: "model_list_unreachable" });
   }
 });
-*/
-/*
 app.post("/api/agent/stream", async (request, reply) => {
   const body = ((request.body as AgentChatRequest | undefined) ?? {});
   const userMessageId = body.user_message_id;
@@ -466,7 +603,6 @@ app.post("/api/agent/stream", async (request, reply) => {
     reply.raw.write(sseEvent("error", { detail: error instanceof Error ? error.message : "agent_request_failed" }));
   } finally { reply.raw.end(); }
 });
-*/
 app.get("/api/integrations/codex", async () => getCodexIntegration());
 app.post("/api/integrations/codex/install", async () => installCodexIntegration());
 app.get("/api/integrations/codex/mcp", async (request) => {
