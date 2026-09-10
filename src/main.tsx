@@ -1851,7 +1851,7 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
     const close = (event: PointerEvent) => {
       if (!(event.target instanceof Node)) return;
       if (event.target instanceof Element && event.target.closest(".ui-select-content")) return;
-      if (!panelRef.current?.contains(event.target)) setOpen(false);
+      if (!panelRef.current?.contains(event.target)) { setOpen(false); setShowHistory(false); }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
@@ -1905,17 +1905,18 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
   const streamingMessage = streamingId ? messages.find((message) => message.id === streamingId) : null;
   const suggestions = [copy.suggestionTraits, copy.suggestionProjects, copy.suggestionConcise];
   const composer = <form className="agent-lite-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onFocus={() => setOpen(true)} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={copy.agentPlaceholder} rows={1} /><div className="agent-lite-actions"><button type="button" className="agent-lite-tool" onClick={() => setShowHistory((value) => !value)} title={copy.newMemory}><Clock3 size={15} /></button><button className="agent-lite-submit" type="submit" disabled={!draft.trim() || busy || !configured} title={busy ? copy.cancel : copy.send} onClick={busy ? (event) => { event.preventDefault(); abortRef.current?.abort(); } : undefined}>{busy ? <X size={16} /> : <ArrowUp size={16} />}</button></div></form>;
-  if (!settingsLoaded) return <div className="agent-lite-root"><section ref={panelRef} className="agent-lite-panel" aria-label={settings.name}>{composer}</section></div>;
-  return <div className={`agent-lite-root ${open ? "is-open" : ""}`}>
+  const launcher = <button type="button" className={`agent-lite-launcher ${open ? "is-hidden" : ""}`} onClick={() => setOpen(true)} title={settings.name} aria-label={settings.name}><Bot size={22} /></button>;
+  if (!settingsLoaded) return launcher;
+  return <>{launcher}<div className={`agent-lite-root ${open ? "is-open" : ""}`}>
     <section ref={panelRef} className="agent-lite-panel" aria-label={settings.name}>
       <div className="agent-lite-expanded" aria-hidden={!open}>
-        <header className="agent-lite-header"><div className="agent-lite-brand"><span className="agent-avatar"><Brain size={16} /></span><div><strong>{settings.name}</strong><span>{busy ? (activeTool || copy.processing) : copy.agentDescription}</span></div></div><div className="agent-lite-header-actions"><button className="icon-button" onClick={() => setTab(tab === "config" ? "chat" : "config")} title={tab === "config" ? copy.chat : copy.configuration} aria-label={tab === "config" ? copy.chat : copy.configuration}>{tab === "config" ? <MessageCircle size={15} /> : <Settings2 size={15} />}</button><button className="icon-button" onClick={() => setOpen(false)} title={copy.close}><ChevronDown size={16} /></button></div></header>
+        <header className="agent-lite-header"><div className="agent-lite-brand"><span className="agent-avatar"><Brain size={16} /></span><div><strong>{settings.name}</strong><span>{busy ? (activeTool || copy.processing) : copy.agentDescription}</span></div></div><div className="agent-lite-header-actions"><button className="icon-button" onClick={() => setTab(tab === "config" ? "chat" : "config")} title={tab === "config" ? copy.chat : copy.configuration} aria-label={tab === "config" ? copy.chat : copy.configuration}>{tab === "config" ? <MessageCircle size={15} /> : <Settings2 size={15} />}</button><button className="icon-button" onClick={() => { setOpen(false); setShowHistory(false); }} title={copy.close}><ChevronDown size={16} /></button></div></header>
         <div className="agent-lite-body">{tab === "config" ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); }} /> : <><div className="agent-lite-messages">{messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>{message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown className="agent-markdown" controls={false} mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}{message.toolCalls?.some((tool) => tool.name !== "memory_get_context") ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory_get_context").map((tool, index) => <span key={`${message.id}-${index}`}><Check size={11} />{tool.label}</span>)}</div> : null}</article>)}{busy && !streamingMessage?.content && <div className="agent-thinking"><LoaderCircle size={14} /><span className="agent-thinking-label">{activeTool || copy.readingMemory}</span><i /><i /><i /></div>}{error && <p className="agent-error">{error}</p>}<div ref={messagesEndRef} className="agent-messages-end" /></div><div className="agent-lite-suggestions">{suggestions.map((item) => <button key={item} onClick={() => void send(item)} disabled={busy}>{item}</button>)}</div></>}</div>
       </div>
       {composer}
       {showHistory ? <div className="agent-lite-popover"><button type="button" onClick={() => { setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); setDraft(""); setError(""); setShowHistory(false); }}>{copy.newMemory}</button><span>/new</span></div> : null}
     </section>
-  </div>;
+  </div></>;
 }
 
 createRoot(document.getElementById("root")!).render(
