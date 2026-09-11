@@ -94,7 +94,7 @@ id、name、prefix、key_hash（唯一）、allowed_tools JSON、is_default、cr
 
 导航：全部记忆、时间线、归档、偏好与习惯、Scope 分类、标签、MCP 服务、设置。工具栏提供搜索、scope 选择、新建记忆、主题切换。卡片显示类型、时间、正文、scope、置信度、召回次数；点击打开详情，可编辑或软删除。
 
-MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 区域显示路径、状态、启用/更新按钮。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。
+MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 区域显示路径、状态、启用/更新按钮。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。Agent 配置模式只显示配置表单并自动保存，不显示对话输入框；顶部模式按钮提供明确的“返回对话”操作。
 
 Composer 模态用于新建/编辑：正文为主输入，kind、scope、source、confidence、importance、occurred_at、metadata 为辅助字段。保存后刷新并选中新项。按钮用 lucide 图标并提供 tooltip，搜索支持 Cmd/Ctrl+K。
 

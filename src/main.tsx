@@ -12,6 +12,7 @@ import {
 import {
   AlertCircle,
   Activity,
+  ArrowLeft,
   Archive,
   ArrowUp,
   ArrowUpRight,
@@ -31,7 +32,6 @@ import {
   KeyRound,
   LoaderCircle,
   Menu,
-  MessageCircle,
   Moon,
   Pencil,
   Search,
@@ -317,6 +317,7 @@ const ui = {
     collapse: "收起",
     agentPage: "Agent 页面",
     chat: "对话",
+    backToChat: "返回对话",
     configuration: "配置",
     processing: "正在处理",
     readingMemory: "正在读取记忆并生成回复",
@@ -361,6 +362,7 @@ const ui = {
     collapse: "Collapse",
     agentPage: "Agent page",
     chat: "Chat",
+    backToChat: "Back to chat",
     configuration: "Configuration",
     processing: "Processing",
     readingMemory: "Reading memories and preparing a reply",
@@ -1471,7 +1473,14 @@ function MemoryCard({
           {formatDate(item.occurred_at ?? item.created_at, language)}
         </span>
       </div>
-      <p>{item.content}</p>
+      <Streamdown
+        className="memory-markdown memory-card-content"
+        controls={false}
+        mode="static"
+        skipHtml
+      >
+        {item.content}
+      </Streamdown>
       <div className="card-bottom">
         <span>
           {item.project ? (
@@ -1515,7 +1524,14 @@ function MemoryDetail({
       {item.kind === "preference" && item.metadata.always_include === true && (
         <div className="detail-kind kind-badge">{copy.persistentPreference}</div>
       )}
-      <h2>{item.content}</h2>
+      <Streamdown
+        className="memory-markdown memory-detail-content"
+        controls={false}
+        mode="static"
+        skipHtml
+      >
+        {item.content}
+      </Streamdown>
       <div className="detail-meta">
         <div>
           <span>{copy.created}</span>
@@ -1798,6 +1814,14 @@ function AgentConfigForm({
   return (
     <form className="agent-config-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <div className="agent-config-scroll">
+        <div className="agent-config-heading">
+          <div>
+            <span className="agent-config-kicker"><Settings2 size={13} />{copy.configuration}</span>
+            <strong>{copy.agentName}</strong>
+            <p>{copy.agentDescription}</p>
+          </div>
+          <span className="agent-config-status">{saving ? copy.saving : copy.saved}</span>
+        </div>
         <section className="agent-config-section">
           <div className="agent-config-fields">
             <label className="config-field"><span>Base URL</span><input required value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://api.example.com/v1" /></label>
@@ -1915,14 +1939,15 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
   const composer = <form className="agent-lite-composer" onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea value={draft} onFocus={() => setOpen(true)} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={copy.agentPlaceholder} rows={1} /><div className="agent-lite-actions"><button type="button" className="agent-lite-tool" onClick={() => setShowHistory((value) => !value)} title={copy.newMemory}><Clock3 size={15} /></button><button className="agent-lite-submit" type="submit" disabled={!draft.trim() || busy || !configured} title={busy ? copy.cancel : copy.send} onClick={busy ? (event) => { event.preventDefault(); abortRef.current?.abort(); } : undefined}>{busy ? <X size={16} /> : <ArrowUp size={16} />}</button></div></form>;
   const launcher = <button type="button" className={`agent-lite-launcher ${open ? "is-hidden" : ""}`} onClick={() => setOpen(true)} title={settings.name} aria-label={settings.name}><Bot size={22} /></button>;
   if (!settingsLoaded) return launcher;
-  return <>{launcher}<div className={`agent-lite-root ${open ? "is-open" : ""}`}>
+  const isConfigTab = tab === "config";
+  return <>{launcher}<div className={`agent-lite-root ${open ? "is-open" : ""} ${isConfigTab ? "is-config" : "is-chat"}`}>
     <section ref={panelRef} className="agent-lite-panel" aria-label={settings.name}>
       <div className="agent-lite-expanded" aria-hidden={!open}>
-        <header className="agent-lite-header"><div className="agent-lite-brand"><span className="agent-avatar"><Brain size={16} /></span><div><strong>{settings.name}</strong><span>{busy ? (activeTool || copy.processing) : copy.agentDescription}</span></div></div><div className="agent-lite-header-actions"><button className="icon-button" onClick={() => setTab(tab === "config" ? "chat" : "config")} title={tab === "config" ? copy.chat : copy.configuration} aria-label={tab === "config" ? copy.chat : copy.configuration}>{tab === "config" ? <MessageCircle size={15} /> : <Settings2 size={15} />}</button><button className="icon-button" onClick={() => { setOpen(false); setShowHistory(false); }} title={copy.close}><ChevronDown size={16} /></button></div></header>
-        <div className="agent-lite-body">{tab === "config" ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); }} /> : <><div className="agent-lite-messages">{messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>{message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown className="agent-markdown" controls={false} mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}{message.toolCalls?.some((tool) => tool.name !== "memory-get-context") ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory-get-context").map((tool, index) => <span key={`${message.id}-${index}`}><Check size={11} />{tool.label}</span>)}</div> : null}</article>)}{busy && !streamingMessage?.content && <div className="agent-thinking"><LoaderCircle size={14} /><span className="agent-thinking-label">{activeTool || copy.readingMemory}</span><i /><i /><i /></div>}{error && <p className="agent-error">{error}</p>}<div ref={messagesEndRef} className="agent-messages-end" /></div><div className="agent-lite-suggestions">{suggestions.map((item) => <button key={item} onClick={() => void send(item)} disabled={busy}>{item}</button>)}</div></>}</div>
+        <header className="agent-lite-header"><div className="agent-lite-brand"><span className="agent-avatar"><Brain size={16} /></span><div><strong>{settings.name}</strong><span>{isConfigTab ? copy.configuration : busy ? (activeTool || copy.processing) : copy.agentDescription}</span></div></div><div className="agent-lite-header-actions"><button type="button" className={`agent-lite-mode-button ${isConfigTab ? "is-back" : ""}`} onClick={() => { setTab(isConfigTab ? "chat" : "config"); setShowHistory(false); }} title={isConfigTab ? copy.backToChat : copy.configuration} aria-label={isConfigTab ? copy.backToChat : copy.configuration}>{isConfigTab ? <ArrowLeft size={15} /> : <Settings2 size={15} />}<span>{isConfigTab ? copy.backToChat : copy.configuration}</span></button><button type="button" className="icon-button" onClick={() => { setOpen(false); setShowHistory(false); }} title={copy.close} aria-label={copy.close}><ChevronDown size={16} /></button></div></header>
+        <div className={`agent-lite-body ${isConfigTab ? "is-config" : "is-chat"}`}>{isConfigTab ? <AgentConfigForm language={language} initial={settings} onSaved={(next) => { setSettings(next); }} /> : <><div className="agent-lite-messages">{messages.map((message) => <article className={`agent-message ${message.role}`} key={message.id}>{message.content ? <div className="agent-message-bubble">{message.role === "assistant" ? <Streamdown className="agent-markdown" controls={false} mode={streamingId === message.id ? "streaming" : "static"} isAnimating={streamingId === message.id} parseIncompleteMarkdown={streamingId === message.id} skipHtml>{message.content}</Streamdown> : <span className="agent-plain-text">{message.content}</span>}</div> : null}{message.toolCalls?.some((tool) => tool.name !== "memory-get-context") ? <div className="agent-tool-calls">{message.toolCalls.filter((tool) => tool.name !== "memory-get-context").map((tool, index) => <span key={`${message.id}-${index}`}><Check size={11} />{tool.label}</span>)}</div> : null}</article>)}{busy && !streamingMessage?.content && <div className="agent-thinking"><LoaderCircle size={14} /><span className="agent-thinking-label">{activeTool || copy.readingMemory}</span><i /><i /><i /></div>}{error && <p className="agent-error">{error}</p>}<div ref={messagesEndRef} className="agent-messages-end" /></div><div className="agent-lite-suggestions">{suggestions.map((item) => <button key={item} onClick={() => void send(item)} disabled={busy}>{item}</button>)}</div></>}</div>
       </div>
-      {composer}
-      {showHistory ? <div className="agent-lite-popover"><button type="button" onClick={() => { setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); setDraft(""); setError(""); setShowHistory(false); }}>{copy.newMemory}</button><span>/new</span></div> : null}
+      {!isConfigTab ? composer : null}
+      {!isConfigTab && showHistory ? <div className="agent-lite-popover"><button type="button" onClick={() => { setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); setDraft(""); setError(""); setShowHistory(false); }}>{copy.newMemory}</button><span>/new</span></div> : null}
     </section>
   </div></>;
 }
