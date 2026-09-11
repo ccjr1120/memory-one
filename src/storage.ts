@@ -367,7 +367,7 @@ export class MemoryStore {
     const max = Math.min(Math.max(limit, 1), 100);
     const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
     const rows = this.db.prepare(`SELECT m.* FROM memories m
-      WHERE m.scope = @scope AND ${projectFilter} AND m.kind = 'preference' AND m.deleted_at IS NULL
+      WHERE m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
         AND json_extract(m.metadata_json, '$.always_include') = 1
       ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, m.importance DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
       .all({ scope, project, limit: max }) as Record<string, unknown>[];

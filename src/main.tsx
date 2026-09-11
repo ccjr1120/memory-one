@@ -1825,6 +1825,7 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [contextLoaded, setContextLoaded] = useState(false);
   const panelRef = useRef<HTMLElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -1859,6 +1860,9 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
   useEffect(() => {
+    setContextLoaded(false);
+  }, [settings.scope, settings.provider, settings.model, settings.baseUrl, settings.apiKey, settings.autoContext]);
+  useEffect(() => {
     if (!open || tab !== "chat") return;
     const frame = window.requestAnimationFrame(() => messagesEndRef.current?.scrollIntoView({ block: "end" }));
     return () => window.cancelAnimationFrame(frame);
@@ -1869,7 +1873,7 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
     const content = value.trim();
     if (!content || busy || !configured) return;
     if (content.toLowerCase() === "/new") {
-      setDraft(""); setError(""); setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); return;
+      setDraft(""); setError(""); setContextLoaded(false); setMessages([{ ...welcomeMessage, id: crypto.randomUUID() }]); return;
     }
     setDraft(""); setError(""); setBusy(true); setActiveTool(null);
     const user = { id: crypto.randomUUID(), role: "user" as const, content };
@@ -1878,9 +1882,11 @@ function AgentChat({ onMemoryChanged, language = "zh" }: { onMemoryChanged: () =
     setMessages((current) => [...current, user, assistant]);
     void persist(user); void persist(assistant);
     const controller = new AbortController(); abortRef.current = controller;
+    const shouldLoadContext = settings.autoContext && !contextLoaded;
     try {
-      const response = await fetch("/api/agent/stream", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ message: content, user_message_id: user.id, assistant_message_id: assistant.id, provider: settings.provider, model: settings.model, base_url: settings.baseUrl || null, api_key: settings.apiKey || null, scope: settings.scope || null, auto_context: settings.autoContext, history: [...messages, user].slice(-12).map(({ role, content: text }) => ({ role, content: text })) }) });
+      const response = await fetch("/api/agent/stream", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ message: content, user_message_id: user.id, assistant_message_id: assistant.id, provider: settings.provider, model: settings.model, base_url: settings.baseUrl || null, api_key: settings.apiKey || null, scope: settings.scope || null, auto_context: shouldLoadContext, history: [...messages, user].slice(-12).map(({ role, content: text }) => ({ role, content: text })) }) });
       if (!response.ok || !response.body) throw new Error("agent_request_failed");
+      if (shouldLoadContext) setContextLoaded(true);
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let tools: NonNullable<AgentMessage["toolCalls"]> = [];
       while (true) {
         const { value, done } = await reader.read();

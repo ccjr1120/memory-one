@@ -50,7 +50,7 @@ Fastify 应用服务器 (8765)
 
 ### 3.3 内置记忆管家
 
-`/api/agent/stream` 接收消息、历史、provider、model、base_url、api_key、scope、auto_context，以 SSE 返回 `delta`、`tool`、`done`。支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages；系统提示要求中文、涉及记忆优先调用工具、删除前确认唯一目标。每个新任务默认先调 `memory-get-context`，后续具体历史信息使用 `memory-search`；“有哪些记忆/总结特点”等概览问题改用 `memory_list`（最多 50 条）。Agent 消息与工具调用写入 `agent_messages`。
+`/api/agent/stream` 接收消息、历史、provider、model、base_url、api_key、scope、auto_context，以 SSE 返回 `delta`、`tool`、`done`。支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages；系统提示要求中文、涉及记忆优先调用工具、删除前确认唯一目标；只有用户明确要求记住、保存、修改或删除时才写入，未明确要求但可能值得保存时先询问确认。每个新任务的首次消息默认先调 `memory-get-context`，同一任务后续具体历史信息使用 `memory-search`；“有哪些记忆/总结特点”等概览问题改用 `memory_list`（最多 50 条）。Agent 消息与工具调用写入 `agent_messages`。
 
 ## 4. 数据模型
 
@@ -115,7 +115,7 @@ Composer 模态用于新建/编辑：正文为主输入，kind、scope、source�
 
 ### Agent 一轮
 
-提交消息 -> 校验配置 -> 自动 `memory-get-context` -> 注入 provider 请求 -> provider 可能发起 `memory-search` 等 MCP 调用 -> 执行并回传 -> SSE 展示文本/工具状态 -> 保存消息 -> 发生写入/删除时刷新工作台。
+新任务首次提交消息 -> 校验配置 -> 自动 `memory-get-context`；同一任务后续提交消息跳过固定上下文读取 -> 注入 provider 请求 -> provider 可能发起 `memory-search` 等 MCP 调用 -> 执行并回传 -> SSE 展示文本/工具状态 -> 保存消息 -> 发生写入/删除时刷新工作台。
 
 ### Codex 集成
 
