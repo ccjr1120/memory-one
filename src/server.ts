@@ -30,7 +30,7 @@ type AgentEvent = { type: "delta"; text: string } | { type: "tool"; tool: AgentT
 type ProviderMessage = Record<string, unknown>;
 
 const agentSystemPrompt = "你是 Memory One 的记忆管家，首要职责是结合已读取的相关记忆直接回答用户的问题。你可以主动搜索和读取记忆来提高回答准确性，但不得因为普通对话、提问、纠正回答、顺带提到的偏好或项目细节而新增、更新或删除记忆。只有当用户明确要求‘记住/保存’某项内容、明确要求修改某条记忆，或明确要求‘忘记/删除’某条记忆时，才调用 memory_store、memory_update 或 memory_delete。执行更新或删除前先确认目标唯一，不要编造记忆。回复使用中文，简洁但可以使用 Markdown。";
-const toolLabels: Record<string, string> = { memory_get_context: "读取相关上下文", memory_search: "搜索记忆", memory_get: "读取记忆", memory_list: "列出记忆", memory_store: "保存记忆", memory_update: "更新记忆", memory_delete: "删除记忆", memory_feedback: "记录反馈" };
+const toolLabels: Record<string, string> = { "memory-get-context": "读取固定上下文", "memory-search": "搜索记忆", memory_get: "读取记忆", memory_list: "列出记忆", memory_store: "保存记忆", memory_update: "更新记忆", memory_delete: "删除记忆", memory_feedback: "记录反馈" };
 const isMemoryOverviewRequest = (message: string) => /(?:有哪些|所有记忆|全部记忆|列出(?:全部)?|查看(?:全部)?|浏览全部|总结(?:下)?(?:我的)?记忆|总结我的特点|概括我的特点|我的画像|我的偏好和特点|我的记忆(?:有什么)?特点|记忆特点)/.test(message);
 
 function sseEvent(type: string, payload: unknown, id?: number) { return `${id === undefined ? "" : `id: ${id}\n`}event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`; }
@@ -142,17 +142,17 @@ async function runAgent(request: AgentChatRequest, emit: (event: AgentEvent) => 
   const tools = normalizeTools(toolResult.tools as Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>);
   const toolCalls: AgentToolCall[] = [];
   const history = (request.history ?? []).slice(-12).filter((message) => message.content).map((message) => ({ role: message.role, content: message.content }));
-  const messages: ProviderMessage[] = [{ role: "system", content: `${agentSystemPrompt}${request.scope ? ` 默认 Scope：${request.scope}` : ""}${request.auto_context === false ? " 不需要自动读取上下文。" : " 每轮任务开始时先调用 memory_get_context。"}` }, ...history];
+  const messages: ProviderMessage[] = [{ role: "system", content: `${agentSystemPrompt}${request.scope ? ` 默认 Scope：${request.scope}` : ""}${request.auto_context === false ? " 不需要自动读取上下文。" : " 每个新任务开始时先调用 memory-get-context；后续如需具体历史信息，使用 memory-search。"}` }, ...history];
   if (!history.some((message) => message.role === "user" && message.content === request.message)) messages.push({ role: "user", content: request.message });
   try {
     if (request.auto_context !== false) {
       const overviewRequest = isMemoryOverviewRequest(request.message);
-      const context = await client.callTool({ name: "memory_get_context", arguments: { query: overviewRequest ? null : request.message, scope: request.scope || null, limit: overviewRequest ? 50 : 10 } }, CallToolResultSchema);
+      const context = await client.callTool({ name: "memory-get-context", arguments: { scope: request.scope || null, limit: overviewRequest ? 50 : 10 } }, CallToolResultSchema);
       const contextText = ((context as any).content as Array<{ type: string; text?: string }> | undefined)?.filter((item) => item.type === "text").map((item) => item.text ?? "").join("\n") || "{}";
       const parsed = (() => { try { return JSON.parse(contextText); } catch { return contextText; } })();
-      toolCalls.push({ name: "memory_get_context", label: toolLabels.memory_get_context, count: Array.isArray(parsed) ? parsed.length : parsed?.memories?.length });
+      toolCalls.push({ name: "memory-get-context", label: toolLabels["memory-get-context"], count: Array.isArray(parsed) ? parsed.length : parsed?.memories?.length });
       emit({ type: "tool", tool: toolCalls.at(-1)! });
-      messages[0] = { role: "system", content: `${messages[0].content}\n\n已自动读取 memory_get_context，结果如下。请基于这些结果回答，除非需要更精确检索，否则不要重复调用该工具：\n${contextText}` };
+      messages[0] = { role: "system", content: `${messages[0].content}\n\n已自动读取 memory-get-context，结果如下。请基于这些固定上下文回答；如需查找具体历史信息，请调用 memory-search，不要重复调用 memory-get-context：\n${contextText}` };
       if (overviewRequest) {
         const listed = await client.callTool({ name: "memory_list", arguments: { scope: request.scope || null, limit: 100 } }, CallToolResultSchema);
         const listedText = ((listed as any).content as Array<{ type: string; text?: string }> | undefined)?.filter((item) => item.type === "text").map((item) => item.text ?? "").join("\n") || "[]";
@@ -170,7 +170,7 @@ async function runAgent(request: AgentChatRequest, emit: (event: AgentEvent) => 
       else messages.push({ role: "assistant", content: result.content || null, tool_calls: result.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.arguments } })) });
       for (const call of result.toolCalls) {
         const args = JSON.parse(call.arguments || "{}");
-        if (request.scope && ["memory_get_context", "memory_search", "memory_list", "memory_store"].includes(call.name) && args.scope == null) args.scope = request.scope;
+        if (request.scope && ["memory-get-context", "memory-search", "memory_list", "memory_store"].includes(call.name) && args.scope == null) args.scope = request.scope;
         if (request.scope && call.name === "memory_update" && args.patch && typeof args.patch === "object" && args.patch.scope == null) args.patch = { ...args.patch, scope: request.scope };
         const output = await client.callTool({ name: call.name, arguments: args }, CallToolResultSchema);
         const outputContent = (output as any).content as Array<{ type: string; text?: string }> | undefined;
@@ -192,11 +192,11 @@ const codexGuidanceEnd = "<!-- memory-one:codex:end -->";
 const codexGuidance = `${codexGuidanceStart}
 ## Memory One
 
-Before starting any user task, call the Memory One MCP tool \`memory_get_context\` once to retrieve relevant prior experience.
+Before starting any new user task, call the Memory One MCP tool \`memory-get-context\` once to retrieve persistent context.
 
-- Use a concise summary of the current task as the query.
 - When working in a project, resolve the Git repository root and pass its absolute directory path as \`scope\`. Use the same scope when storing project-specific memory; omit \`scope\` for general preferences and knowledge.
-- Apply relevant preferences, decisions, corrections, and lessons before planning, answering, editing files, or calling task-specific tools.
+- Apply the returned persistent preferences and project conventions before planning, answering, editing files, or calling task-specific tools.
+- Do not repeat \`memory-get-context\` during follow-up turns of the same task. Use \`memory-search\` when a specific historical preference, decision, fact, or project convention is needed.
 - After the user expresses a correction, preference, decision, project convention, personal fact, or other durable information, proactively save it with \`memory_store\` (or update the matching memory with \`memory_update\`) before finishing the task. Do not save clearly transient, one-off details.
 - Do not skip retrieval merely because the task appears self-contained.
 ${codexGuidanceEnd}`;
@@ -325,11 +325,11 @@ async function trackToolCall<T>(toolName: string, action: () => T | Promise<T>):
   }
 }
 
-const mcpToolNames = ["memory_store", "memory_search", "memory_get_context", "memory_get", "memory_list", "memory_update", "memory_delete", "memory_feedback"] as const;
+const mcpToolNames = ["memory_store", "memory-search", "memory-get-context", "memory_get", "memory_list", "memory_update", "memory_delete", "memory_feedback"] as const;
 
 function createMcpServer(allowedTools?: Set<string>) {
   const mcp = new McpServer({ name: "memory-one", version: "0.1.0" }, {
-    instructions: "Memory One provides durable experience for every task. At the start of each user task, call memory_get_context before planning, answering, editing, or using task-specific tools. Query with a concise summary of the current task and apply relevant retrieved memories. After the user expresses a correction, preference, decision, project convention, personal fact, or other durable information, proactively save it with memory_store before finishing the task; use memory_update when correcting an existing memory. Do not save clearly transient, one-off details. Use memory_search for focused follow-up retrieval. Use memory_feedback after retrieved memories prove useful or unhelpful. Only use memory_delete when the user explicitly asks to forget a specific memory. Scope is optional."
+    instructions: "Memory One provides durable experience for every task. At the start of each new user task, call memory-get-context before planning, answering, editing, or using task-specific tools. It returns persistent preferences and project conventions without a query. Do not repeat it during follow-up turns; use memory-search for focused retrieval of specific historical information. After the user expresses a correction, preference, decision, project convention, personal fact, or other durable information, proactively save it with memory_store before finishing the task; use memory_update when correcting an existing memory. Do not save clearly transient, one-off details. Use memory_feedback after retrieved memories prove useful or unhelpful. Only use memory_delete when the user explicitly asks to forget a specific memory. Scope is optional."
   });
   const registerTool = (name: string, description: string, schema: Record<string, z.ZodTypeAny>, handler: (input: any) => any) => {
     if (!allowedTools || allowedTools.has(name)) mcp.tool(name, description, schema, handler);
@@ -340,9 +340,9 @@ registerTool("memory_store", "Use proactively when the user states a durable pre
   session_id: z.string().nullable().optional(), source: z.string().nullable().optional(), occurred_at: z.string().nullable().optional(),
   confidence: z.number().default(1), importance: z.number().default(0.5), metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 }, async (input: any) => trackToolCall("memory_store", () => json(exposeMemory(store.create(toStorageInput(input as Record<string, unknown>))))));
-registerTool("memory_search", "Use before answering when prior user preferences, past decisions, project conventions, or earlier facts may matter. Prefer searching over guessing, including when the answer seems obvious. Search with 5–12 concise high-signal concepts or identifiers, not the full user message; use scope as an optional category filter.", { query: z.string(), scope: z.string().nullable().optional(), limit: z.number().int().default(20) }, async ({ query, scope, limit }: any) => trackToolCall("memory_search", () => json(exposeMemories(store.recordRecalls(store.search(query, storageScope, scope && scope !== "global" ? scope : null, limit))))));
-registerTool("memory_get_context", "Universal pre-task context retrieval. Call once at the beginning of every user task, before planning, answering, editing, or invoking task-specific tools. Preferences with metadata.always_include=true are always included before relevant conditional preferences and other memories. When working in a Git repository, pass the repository root's absolute directory path as scope. Project context includes memories from that directory and global memories; omitting scope retrieves global memories only. When query is provided, use 5–12 concise high-signal concepts or identifiers rather than the full user message; keep repository paths in scope.", { query: z.string().nullable().optional(), scope: z.string().nullable().optional(), limit: z.number().int().default(10) }, async ({ query, scope, limit }: any) => trackToolCall("memory_get_context", () => { const category = scope && scope !== "global" ? scope : null; const memories = store.context(query?.trim() || null, storageScope, category, limit); return json({ scope: scope ?? "global", strategy: category ? "project_plus_global" : "global", memories: exposeMemories(store.recordRecalls(memories)) }); }));
-registerTool("memory_get", "Use after memory_search or memory_get_context returns a memory ID and you need the complete record before relying on or updating it.", { memory_id: z.string() }, async ({ memory_id }: any) => trackToolCall("memory_get", () => { const memory = store.get(memory_id); return json(exposeMemory(memory ? store.recordRecalls([memory])[0] : { error: "memory_not_found" })); }));
+registerTool("memory-search", "Use when a specific historical preference, decision, fact, or project convention may matter. Search with 5–12 concise high-signal concepts or identifiers, not the full user message; use scope as an optional category filter.", { query: z.string(), scope: z.string().nullable().optional(), limit: z.number().int().default(20) }, async ({ query, scope, limit }: any) => trackToolCall("memory-search", () => json(exposeMemories(store.recordRecalls(store.search(query, storageScope, scope && scope !== "global" ? scope : null, limit))))));
+registerTool("memory-get-context", "Use once at the beginning of each new user task. Return persistent memories marked with metadata.always_include=true, prioritizing the current project before global memories. Do not pass a query; use memory-search for focused follow-up retrieval. When working in a Git repository, pass the repository root's absolute directory path as scope. Scope is optional.", { scope: z.string().nullable().optional(), limit: z.number().int().default(10) }, async ({ scope, limit }: any) => trackToolCall("memory-get-context", () => { const category = scope && scope !== "global" ? scope : null; const memories = store.persistentContext(storageScope, category, limit); return json({ scope: scope ?? "global", strategy: category ? "persistent_project_plus_global" : "persistent_global", memories: exposeMemories(store.recordRecalls(memories)) }); }));
+registerTool("memory_get", "Use after memory-search or memory-get-context returns a memory ID and you need the complete record before relying on or updating it.", { memory_id: z.string() }, async ({ memory_id }: any) => trackToolCall("memory_get", () => { const memory = store.get(memory_id); return json(exposeMemory(memory ? store.recordRecalls([memory])[0] : { error: "memory_not_found" })); }));
 registerTool("memory_list", "Use when reviewing recent memories, auditing what has been saved, or preparing context without a specific search query. Scope is an optional category filter.", { scope: z.string().nullable().optional(), limit: z.number().int().default(50) }, async ({ scope, limit }: any) => trackToolCall("memory_list", () => json(exposeMemories(store.list(storageScope, scope && scope !== "global" ? scope : null, limit)))));
 registerTool("memory_update", "Use when the user corrects, refines, or supersedes a stored memory. Fetch the record first when needed, then update only the changed fields. Scope is an optional category.", { memory_id: z.string(), patch: z.record(z.string(), z.unknown()) }, async ({ memory_id, patch }: any) => trackToolCall("memory_update", () => json(exposeMemory(store.update(memory_id, toStoragePatch(patch as Record<string, unknown>)) ?? { error: "memory_not_found" }))));
 registerTool("memory_delete", "Use only when the user explicitly asks to forget or delete a specific memory. This is a soft delete.", { memory_id: z.string() }, async ({ memory_id }: any) => trackToolCall("memory_delete", () => json({ deleted: store.delete(memory_id) })));

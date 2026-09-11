@@ -78,7 +78,7 @@ Codex 增强用于告诉 Codex 主动使用 Memory One，而不只是连接 MCP�
 
 启用后，Codex 会被要求：
 
-- 每项任务开始前调用一次 `memory_get_context`。
+- 每项新任务开始前调用一次 `memory-get-context`；同一任务后续按需使用 `memory-search`。
 - 在 Git 项目中使用仓库根目录的绝对路径作为 `scope`。
 - 将用户表达的长期偏好、决定、纠正和项目约定及时写入或更新到 Memory One。
 
@@ -90,13 +90,13 @@ Memory One 只会替换 `~/.codex/AGENTS.md` 中由自己管理的 `memory-one:c
 
 1. 在工作台右上角单击 **新建记忆**。
 2. 保存一条希望 Agent 长期遵守的偏好或项目约定。
-3. 在 Agent 中开始一个新任务，确认它调用了 `memory_get_context`。
+3. 在 Agent 中开始一个新任务，确认它调用了 `memory-get-context`。
 4. 回到 **MCP 服务** 页面查看调用统计，或在 **全部记忆** 中检查新增和召回的记忆。
 
 ## 主要能力
 
 - **长期保存经验**：记录偏好、事实、项目决策、工作流程和纠正意见。
-- **任务前自动召回**：通过 `memory_get_context` 在 Agent 开始工作前读取相关经验。
+- **任务前自动召回**：通过 `memory-get-context` 在 Agent 开始工作前读取固定上下文，并通过 `memory-search` 按需检索其他记忆。
 - **区分项目与通用记忆**：使用可选的 `scope` 对记忆分类，同时支持项目记忆与全局记忆联合召回。
 - **可视化管理**：搜索、筛选、新建、编辑和删除记忆，并查看召回次数与置信度。
 - **本地存储**：默认仅监听本机地址，数据保存在本地 SQLite 数据库中。
@@ -131,8 +131,8 @@ MCP 服务与 Codex 配置：
 
 | 工具 | 用途 |
 | --- | --- |
-| `memory_get_context` | 在任务开始时检索相关经验 |
-| `memory_search` | 按关键词搜索记忆，可选 `scope` |
+| `memory-get-context` | 在新任务开始时读取固定上下文 |
+| `memory-search` | 按关键词按需搜索记忆，可选 `scope` |
 | `memory_store` | 保存偏好、事实、决策、流程或纠正意见 |
 | `memory_get` | 按 ID 读取单条完整记忆 |
 | `memory_list` | 列出记忆，可选 `scope` |
@@ -148,7 +148,7 @@ MCP 服务与 Codex 配置：
 - **通用记忆**：省略 `scope`。
 - **其他分类**：也可以使用 `work`、`personal` 等自定义值。
 
-`memory_get_context` 传入项目 `scope` 时，会联合召回该项目和全局记忆；省略 `scope` 时，只召回全局记忆。`memory_search` 省略 `scope` 时，可以跨分类搜索。
+`memory-get-context` 传入项目 `scope` 时，会优先返回该项目和全局范围内标记为 `metadata.always_include=true` 的固定记忆；省略 `scope` 时，只返回全局固定记忆。后续需要具体历史信息时使用 `memory-search`；省略 `scope` 时可以跨分类搜索。
 
 ## CLI 命令
 
@@ -216,7 +216,7 @@ npm uninstall --global @ccjr1120/memory-one
 确认以下事项：
 
 1. Agent 已配置 Memory One MCP 地址。
-2. 如果开启了 Bearer Key 认证，确认客户端已填写有效 Key，且 Key 已授权 `memory_get_context`。
+2. 如果开启了 Bearer Key 认证，确认客户端已填写有效 Key，且 Key 已授权 `memory-get-context`。
 3. 使用 Codex 时，确认已在 Codex 卡片中启用 **全局任务前置记忆**。
 4. 启用后已经重启 Agent 或开启新会话。
 
@@ -226,4 +226,4 @@ npm uninstall --global @ccjr1120/memory-one
 
 ### 如何确认 MCP 已连接
 
-在 Agent 中调用一次 `memory_get_context`，然后打开工作台的 **MCP 服务** 页面查看调用统计。也可以让 Agent 保存一条测试记忆，再到 **全部记忆** 中搜索确认。
+在 Agent 中调用一次 `memory-get-context`，然后打开工作台的 **MCP 服务** 页面查看调用统计。也可以让 Agent 保存一条测试记忆，再到 **全部记忆** 中搜索确认。

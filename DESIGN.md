@@ -37,8 +37,8 @@ Fastify 应用服务器 (8765)
 
 | 工具 | 输入 | 行为 |
 | --- | --- | --- |
-| `memory_get_context` | `query?`, `scope?`, `limit` 默认 10 | 优先固定返回 `metadata.always_include=true` 的常驻偏好，再按相关性召回条件偏好和其他记忆；项目 scope 联合召回项目与全局记忆；省略 scope 仅召回全局；每项任务开始调用一次 |
-| `memory_search` | `query`, `scope?`, `limit` 默认 20 | FTS 搜索并记录召回 |
+| `memory-get-context` | `scope?`, `limit` 默认 10 | 返回 `metadata.always_include=true` 的固定上下文；传入项目 scope 时优先返回项目固定记忆，再返回全局固定记忆；省略 scope 仅返回全局固定记忆；每项新任务开始调用一次 |
+| `memory-search` | `query`, `scope?`, `limit` 默认 20 | 按需使用 FTS 搜索具体历史记忆并记录召回 |
 | `memory_store` | `content`, `kind?`, `scope?`, `confidence?`, `importance?`, `metadata?` 等 | 创建，默认 kind=`fact`、confidence=1、importance=.5 |
 | `memory_get` | `memory_id` | 返回单项；不存在返回 `memory_not_found` |
 | `memory_list` | `scope?`, `limit` 默认 50 | 按发生/创建时间倒序 |
@@ -50,7 +50,7 @@ Fastify 应用服务器 (8765)
 
 ### 3.3 内置记忆管家
 
-`/api/agent/stream` 接收消息、历史、provider、model、base_url、api_key、scope、auto_context，以 SSE 返回 `delta`、`tool`、`done`。支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages；系统提示要求中文、涉及记忆优先调用工具、删除前确认唯一目标。每轮默认先调 `memory_get_context`；“有哪些记忆/总结特点”等概览问题改用 `memory_list`（最多 50 条）。Agent 消息与工具调用写入 `agent_messages`。
+`/api/agent/stream` 接收消息、历史、provider、model、base_url、api_key、scope、auto_context，以 SSE 返回 `delta`、`tool`、`done`。支持 OpenAI Chat Completions、OpenAI Responses、Anthropic Messages；系统提示要求中文、涉及记忆优先调用工具、删除前确认唯一目标。每个新任务默认先调 `memory-get-context`，后续具体历史信息使用 `memory-search`；“有哪些记忆/总结特点”等概览问题改用 `memory_list`（最多 50 条）。Agent 消息与工具调用写入 `agent_messages`。
 
 ## 4. 数据模型
 
@@ -115,11 +115,11 @@ Composer 模态用于新建/编辑：正文为主输入，kind、scope、source�
 
 ### Agent 一轮
 
-提交消息 -> 校验配置 -> 自动 `memory_get_context` -> 注入 provider 请求 -> provider 可能发起 MCP 调用 -> 执行并回传 -> SSE 展示文本/工具状态 -> 保存消息 -> 发生写入/删除时刷新工作台。
+提交消息 -> 校验配置 -> 自动 `memory-get-context` -> 注入 provider 请求 -> provider 可能发起 `memory-search` 等 MCP 调用 -> 执行并回传 -> SSE 展示文本/工具状态 -> 保存消息 -> 发生写入/删除时刷新工作台。
 
 ### Codex 集成
 
-读取 `~/.codex/AGENTS.md` -> 只替换 `memory-one:codex` 标记区块 -> 保留其他内容 -> 写入“任务开始前调用 memory_get_context”。只能由用户在页面点击触发。
+读取 `~/.codex/AGENTS.md` -> 只替换 `memory-one:codex` 标记区块 -> 保留其他内容 -> 写入“新任务开始前调用 memory-get-context，后续按需使用 memory-search”。只能由用户在页面点击触发。
 
 ## 9. 复刻验收清单
 

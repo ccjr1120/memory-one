@@ -363,6 +363,17 @@ export class MemoryStore {
     return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
   }
 
+  persistentContext(scope = "user", project: string | null = null, limit = 10): Memory[] {
+    const max = Math.min(Math.max(limit, 1), 100);
+    const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
+    const rows = this.db.prepare(`SELECT m.* FROM memories m
+      WHERE m.scope = @scope AND ${projectFilter} AND m.kind = 'preference' AND m.deleted_at IS NULL
+        AND json_extract(m.metadata_json, '$.always_include') = 1
+      ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, m.importance DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
+      .all({ scope, project, limit: max }) as Record<string, unknown>[];
+    return rows.map((row) => this.decode(row));
+  }
+
   context(query: string | null, scope = "user", project: string | null = null, limit = 10): Memory[] {
     const max = Math.min(Math.max(limit, 1), 100);
     const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
