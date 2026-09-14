@@ -15,6 +15,7 @@ export type MemoryInput = {
   confidence?: number;
   importance?: number;
   metadata?: Record<string, unknown> | null;
+  supersedes_id?: string | null;
 };
 
 export type Memory = Omit<MemoryInput, "metadata"> & {
@@ -30,7 +31,39 @@ export type Memory = Omit<MemoryInput, "metadata"> & {
   deleted_at: string | null;
   recall_count: number;
   last_recalled_at: string | null;
+  superseded_by?: string | null;
   score?: number;
+};
+
+export type MemoryWriteResult = {
+  memory: Memory;
+  duplicate: boolean;
+  similar: Memory[];
+  superseded?: Memory | null;
+};
+
+export type ContextSelection = {
+  strategy: string;
+  token_budget: number;
+  token_estimate: number;
+  memories: Memory[];
+};
+
+export type RecallEvent = {
+  id: number;
+  memory_id: string;
+  source: string;
+  query: string | null;
+  created_at: string;
+};
+
+export type MemoryExport = {
+  schema_version: number;
+  exported_at: string;
+  memories: Array<Memory & { deleted_at: string | null }>;
+  app_config: AppConfig;
+  mcp_config: { use_bearer_key: boolean };
+  agent_config: Omit<AgentConfig, "api_key">;
 };
 
 export type McpToolStats = {
@@ -80,6 +113,32 @@ export type AgentConfig = {
 };
 
 const now = () => new Date().toISOString();
+
+const SCHEMA_VERSION = 2;
+export const CONTEXT_TOKEN_BUDGET = 2400;
+
+const normalizeContent = (content: string) => content.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+const contentHash = (content: string) => createHash("sha256").update(normalizeContent(content)).digest("hex");
+
+export const estimateTokens = (content: string) => {
+  const cjk = (content.match(/[\u3400-\u9fff\uf900-\ufaff]/g) ?? []).length;
+  const other = content.length - cjk;
+  return Math.max(1, Math.ceil(cjk / 1.45 + other / 3.7));
+};
+
+const contentShingles = (content: string) => {
+  const normalized = normalizeContent(content).replace(/[^\p{L}\p{N}]+/gu, "");
+  if (normalized.length <= 2) return new Set([normalized]);
+  return new Set(Array.from({ length: normalized.length - 1 }, (_, index) => normalized.slice(index, index + 2)));
+};
+
+const similarity = (left: string, right: string) => {
+  const a = contentShingles(left); const b = contentShingles(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const value of a) if (b.has(value)) shared += 1;
+  return shared / (a.size + b.size - shared);
+};
 
 const searchStopWords = new Set([
   "以及", "然后", "但是", "因为", "所以", "这个", "那个", "如何", "需要", "进行", "相关", "当前",
@@ -139,7 +198,10 @@ export class MemoryStore {
         updated_at TEXT NOT NULL,
         deleted_at TEXT,
         recall_count INTEGER NOT NULL DEFAULT 0,
-        last_recalled_at TEXT
+        last_recalled_at TEXT,
+        content_hash TEXT,
+        supersedes_id TEXT,
+        superseded_by TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, project);
       CREATE INDEX IF NOT EXISTS idx_memories_session ON memories(session_id);
@@ -232,12 +294,41 @@ export class MemoryStore {
         VALUES (new.rowid, new.content, new.kind, new.scope, new.project, new.source);
       END;
     `);
+    const version = Number(this.db.pragma("user_version", { simple: true }));
     const columns = this.db.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+    if (version < SCHEMA_VERSION) {
+      const backupDir = join(dirname(path), "backups");
+      mkdirSync(backupDir, { recursive: true });
+      this.db.exec(`VACUUM INTO '${join(backupDir, `pre-v${SCHEMA_VERSION}-${Date.now()}.db`).replaceAll("'", "''")}'`);
+    }
     if (!columns.some((column) => column.name === "recall_count")) this.db.exec("ALTER TABLE memories ADD COLUMN recall_count INTEGER NOT NULL DEFAULT 0");
     if (!columns.some((column) => column.name === "last_recalled_at")) this.db.exec("ALTER TABLE memories ADD COLUMN last_recalled_at TEXT");
+    for (const [column, definition] of [
+      ["content_hash", "TEXT"],
+      ["supersedes_id", "TEXT"],
+      ["superseded_by", "TEXT"],
+    ] as const) if (!columns.some((item) => item.name === column)) this.db.exec(`ALTER TABLE memories ADD COLUMN ${column} ${definition}`);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
+      CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories(supersedes_id);
+      CREATE TABLE IF NOT EXISTS memory_recall_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        memory_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        query TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (memory_id) REFERENCES memories(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_memory_recall_events_memory ON memory_recall_events(memory_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_memory_recall_events_created ON memory_recall_events(created_at DESC);
+    `);
     const keyColumns = this.db.prepare("PRAGMA table_info(mcp_keys)").all() as Array<{ name: string }>;
     if (!keyColumns.some((column) => column.name === "is_default")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
     if (!keyColumns.some((column) => column.name === "secret")) this.db.exec("ALTER TABLE mcp_keys ADD COLUMN secret TEXT");
+    const unhashed = this.db.prepare("SELECT id, content FROM memories WHERE content_hash IS NULL").all() as Array<{ id: string; content: string }>;
+    const backfillHash = this.db.prepare("UPDATE memories SET content_hash = ? WHERE id = ?");
+    this.db.transaction(() => { for (const row of unhashed) backfillHash.run(contentHash(row.content), row.id); })();
+    this.db.pragma(`user_version = ${SCHEMA_VERSION}`);
     const existingLanguage = this.getAppConfig().language;
     if (!existingLanguage) {
       try {
@@ -312,17 +403,60 @@ export class MemoryStore {
     return { ...rest, metadata: JSON.parse(String(metadata_json ?? "{}")) } as Memory;
   }
 
+  dataVersion(): string {
+    const row = this.db.prepare("SELECT count(*) AS count, coalesce(max(updated_at), '') AS updated_at FROM memories").get() as { count: number; updated_at: string };
+    return `${row.count}:${row.updated_at}`;
+  }
+
+  private exactDuplicate(input: MemoryInput, hash: string): Memory | null {
+    const project = input.project ?? null;
+    const row = this.db.prepare(`SELECT * FROM memories
+      WHERE content_hash = ? AND scope = ? AND project IS ? AND deleted_at IS NULL AND superseded_by IS NULL
+      ORDER BY CASE WHEN project IS NULL THEN 1 ELSE 0 END, updated_at DESC LIMIT 1`).get(hash, input.scope ?? "user", project) as Record<string, unknown> | undefined;
+    return row ? this.decode(row) : null;
+  }
+
+  findSimilar(content: string, scope = "user", project: string | null = null, limit = 5): Memory[] {
+    const terms = searchTerms(content);
+    if (!terms.length) return [];
+    const ftsQuery = terms.map(quoteFtsTerm).join(" OR ");
+    let rows: Record<string, unknown>[] = [];
+    try {
+      rows = this.db.prepare(`SELECT m.*, bm25(memories_fts) AS score FROM memories_fts JOIN memories m ON m.rowid = memories_fts.rowid
+        WHERE memories_fts MATCH ? AND m.scope = ? AND m.project IS ? AND m.deleted_at IS NULL AND m.superseded_by IS NULL ORDER BY score LIMIT 24`)
+        .all(ftsQuery, scope, project) as Record<string, unknown>[];
+    } catch { rows = []; }
+    return rows.map((row) => this.decode(row)).map((memory) => ({ memory, score: similarity(content, memory.content) }))
+      .filter(({ score }) => score >= 0.62)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, Math.min(Math.max(limit, 0), 10))
+      .map(({ memory }) => memory);
+  }
+
+  createWithIntegrity(input: MemoryInput): MemoryWriteResult {
+    const scope = input.scope ?? "user"; const project = input.project ?? null;
+    const hash = contentHash(input.content);
+    const duplicate = this.exactDuplicate(input, hash);
+    if (duplicate) return { memory: duplicate, duplicate: true, similar: this.findSimilar(input.content, scope, project).filter((item) => item.id !== duplicate.id) };
+    const supersedesId = input.supersedes_id ?? null;
+    const superseded = supersedesId ? this.get(supersedesId) : null;
+    if (supersedesId && !superseded) throw new Error("superseded_memory_not_found");
+    const memory = this.create({ ...input, scope, project, metadata: input.metadata, supersedes_id: supersedesId });
+    if (superseded) this.db.prepare("UPDATE memories SET superseded_by = ?, updated_at = ? WHERE id = ?").run(memory.id, now(), superseded.id);
+    return { memory, duplicate: false, similar: this.findSimilar(input.content, scope, project).filter((item) => item.id !== memory.id), superseded };
+  }
+
   create(input: MemoryInput): Memory {
     const id = input.id ?? randomUUID();
     const timestamp = now();
     this.db.prepare(`INSERT INTO memories
-      (id, content, kind, scope, project, session_id, source, occurred_at, confidence, importance, metadata_json, created_at, updated_at)
-      VALUES (@id, @content, @kind, @scope, @project, @session_id, @source, @occurred_at, @confidence, @importance, @metadata_json, @created_at, @updated_at)`)
+      (id, content, kind, scope, project, session_id, source, occurred_at, confidence, importance, metadata_json, content_hash, supersedes_id, created_at, updated_at)
+      VALUES (@id, @content, @kind, @scope, @project, @session_id, @source, @occurred_at, @confidence, @importance, @metadata_json, @content_hash, @supersedes_id, @created_at, @updated_at)`)
       .run({
         id, content: input.content, kind: input.kind ?? "fact", scope: input.scope ?? "user",
         project: input.project ?? null, session_id: input.session_id ?? null, source: input.source ?? null,
         occurred_at: input.occurred_at ?? null, confidence: input.confidence ?? 1.0, importance: input.importance ?? 0.5,
-        metadata_json: JSON.stringify(input.metadata ?? {}), created_at: timestamp, updated_at: timestamp,
+        metadata_json: JSON.stringify(input.metadata ?? {}), content_hash: contentHash(input.content), supersedes_id: input.supersedes_id ?? null, created_at: timestamp, updated_at: timestamp,
       });
     return this.get(id)!;
   }
@@ -363,15 +497,25 @@ export class MemoryStore {
     return (rows as Record<string, unknown>[]).map((row) => this.decode(row));
   }
 
-  persistentContext(scope = "user", project: string | null = null, limit = 10): Memory[] {
+  persistentContext(scope = "user", project: string | null = null, limit = 10, tokenBudget = CONTEXT_TOKEN_BUDGET): ContextSelection {
     const max = Math.min(Math.max(limit, 1), 100);
     const projectFilter = project ? "(m.project = @project OR m.project IS NULL)" : "m.project IS NULL";
     const rows = this.db.prepare(`SELECT m.* FROM memories m
       WHERE m.scope = @scope AND ${projectFilter} AND m.deleted_at IS NULL
-        AND json_extract(m.metadata_json, '$.always_include') = 1
-      ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END, m.importance DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
+        AND json_extract(m.metadata_json, '$.always_include') = 1 AND m.superseded_by IS NULL
+      ORDER BY CASE WHEN m.project = @project THEN 0 ELSE 1 END,
+        (m.importance * m.confidence) DESC,
+        CASE WHEN json_extract(m.metadata_json, '$.pinned') = 1 THEN 0 ELSE 1 END,
+        m.last_recalled_at DESC, COALESCE(m.occurred_at, m.created_at) DESC LIMIT @limit`)
       .all({ scope, project, limit: max }) as Record<string, unknown>[];
-    return rows.map((row) => this.decode(row));
+    const selected: Memory[] = []; let tokens = 0;
+    for (const row of rows.map((row) => this.decode(row))) {
+      const cost = estimateTokens(`${row.kind}\n${String(row.content)}`);
+      if (selected.length && tokens + cost > tokenBudget) continue;
+      selected.push(row); tokens += cost;
+      if (tokens >= tokenBudget) break;
+    }
+    return { strategy: "project_first_weighted_recent_within_token_budget", token_budget: tokenBudget, token_estimate: tokens, memories: selected };
   }
 
   context(query: string | null, scope = "user", project: string | null = null, limit = 10): Memory[] {
@@ -415,13 +559,25 @@ export class MemoryStore {
     return [...persistentRows, ...relevantRows].slice(0, max).map((row) => this.decode(row));
   }
 
-  recordRecalls(memories: Memory[]): Memory[] {
+  recordRecalls(memories: Memory[], source = "search", query: string | null = null): Memory[] {
     if (!memories.length) return memories;
     const timestamp = now();
     const update = this.db.prepare("UPDATE memories SET recall_count = recall_count + 1, last_recalled_at = ? WHERE id = ? AND deleted_at IS NULL");
+    const insertEvent = this.db.prepare("INSERT INTO memory_recall_events (memory_id, source, query, created_at) VALUES (?, ?, ?, ?)");
     const ids = [...new Set(memories.map((memory) => memory.id))];
-    this.db.transaction(() => { for (const id of ids) update.run(timestamp, id); })();
+    this.db.transaction(() => { for (const id of ids) { update.run(timestamp, id); insertEvent.run(id, source, query, timestamp); } })();
     return memories.map((memory) => ({ ...memory, recall_count: (memory.recall_count ?? 0) + 1, last_recalled_at: timestamp }));
+  }
+
+  listMemoryRecalls(memoryId: string, limit = 10): RecallEvent[] {
+    return this.db.prepare("SELECT id, memory_id, source, query, created_at FROM memory_recall_events WHERE memory_id = ? ORDER BY id DESC LIMIT ?")
+      .all(memoryId, Math.min(Math.max(limit, 1), 50)) as unknown as RecallEvent[];
+  }
+
+  listRecentRecalls(limit = 50): Array<RecallEvent & { content: string; scope: string }> {
+    return this.db.prepare(`SELECT e.id, e.memory_id, e.source, e.query, e.created_at, m.content, m.project AS scope
+      FROM memory_recall_events e JOIN memories m ON m.id = e.memory_id
+      ORDER BY e.id DESC LIMIT ?`).all(Math.min(Math.max(limit, 1), 200)) as unknown as Array<RecallEvent & { content: string; scope: string }>;
   }
 
   mostRecalled(scope = "user", project: string | null = null, limit = 5): Memory[] {
@@ -437,6 +593,8 @@ export class MemoryStore {
     const values: Record<string, unknown> = {};
     for (const key of allowed) if (key in patch) values[key] = patch[key];
     if ("metadata" in patch) values.metadata_json = JSON.stringify(patch.metadata ?? {});
+    if ("supersedes_id" in patch) values.supersedes_id = patch.supersedes_id ?? null;
+    if ("content" in patch && typeof patch.content === "string") values.content_hash = contentHash(patch.content);
     const entries = Object.entries(values);
     if (!entries.length) return this.get(id);
     values.updated_at = now();
@@ -569,5 +727,56 @@ export class MemoryStore {
         model = excluded.model, base_url = excluded.base_url, api_key = excluded.api_key,
         auto_context = excluded.auto_context, updated_at = excluded.updated_at`).run({ ...next, auto_context: next.auto_context ? 1 : 0 });
     return this.getAgentConfig();
+  }
+
+  exportData(): MemoryExport {
+    const rows = this.db.prepare("SELECT * FROM memories ORDER BY created_at ASC").all() as Record<string, unknown>[];
+    const agent = this.getAgentConfig(); const { api_key: _apiKey, ...safeAgent } = agent;
+    return {
+      schema_version: SCHEMA_VERSION,
+      exported_at: now(),
+      memories: rows.map((row) => this.decode(row)),
+      app_config: this.getAppConfig(),
+      mcp_config: { use_bearer_key: this.getMcpConfig().use_bearer_key },
+      agent_config: safeAgent,
+    };
+  }
+
+  importData(input: unknown, mode: "merge" | "replace"): { imported: number; skipped: number; mode: string } {
+    const value = input as MemoryExport | null;
+    if (!value || value.schema_version !== SCHEMA_VERSION || !Array.isArray(value.memories)) throw new Error("invalid_backup");
+    const result = this.db.transaction(() => {
+      if (mode === "replace") {
+        this.db.exec("DELETE FROM memory_recall_events; DELETE FROM memories;");
+      }
+      let imported = 0; let skipped = 0;
+      const insert = this.db.prepare(`INSERT INTO memories
+        (id, content, kind, scope, project, session_id, source, occurred_at, confidence, importance, metadata_json,
+         embedding, created_at, updated_at, deleted_at, recall_count, last_recalled_at, content_hash, supersedes_id, superseded_by)
+        VALUES (@id, @content, @kind, @scope, @project, @session_id, @source, @occurred_at, @confidence, @importance, @metadata_json,
+         @embedding, @created_at, @updated_at, @deleted_at, @recall_count, @last_recalled_at, @content_hash, @supersedes_id, @superseded_by)`);
+      for (const item of value.memories) {
+        if (!item?.id || typeof item.content !== "string") { skipped += 1; continue; }
+        if (mode === "merge") {
+          const existing = this.exactDuplicate({ content: item.content, scope: item.scope, project: item.project ?? null }, contentHash(item.content));
+          if (existing) { skipped += 1; continue; }
+          try { this.create({ ...item, metadata: item.metadata ?? {} }); imported += 1; continue; } catch { skipped += 1; continue; }
+        }
+        insert.run({
+          id: item.id, content: item.content, kind: item.kind ?? "fact", scope: item.scope ?? "user", project: item.project ?? null,
+          session_id: item.session_id ?? null, source: item.source ?? null, occurred_at: item.occurred_at ?? null,
+          confidence: Number(item.confidence ?? 1), importance: Number(item.importance ?? .5), metadata_json: JSON.stringify(item.metadata ?? {}),
+          embedding: item.embedding ?? null, created_at: item.created_at ?? now(), updated_at: item.updated_at ?? now(), deleted_at: item.deleted_at ?? null,
+          recall_count: Number(item.recall_count ?? 0), last_recalled_at: item.last_recalled_at ?? null,
+          content_hash: contentHash(item.content), supersedes_id: item.supersedes_id ?? null, superseded_by: item.superseded_by ?? null,
+        });
+        imported += 1;
+      }
+      if (value.app_config?.language === "zh" || value.app_config?.language === "en") this.saveAppConfig(value.app_config.language);
+      if (typeof value.mcp_config?.use_bearer_key === "boolean") this.saveMcpConfig(value.mcp_config.use_bearer_key);
+      if (value.agent_config) this.saveAgentConfig(value.agent_config);
+      return { imported, skipped, mode };
+    })();
+    return result;
   }
 }

@@ -14,9 +14,10 @@ Memory One 是个人长期记忆工作台：浏览器管理偏好、事实、决
 React/Vite 工作台 (5173)
         | REST/JSON + SSE
 Fastify 应用服务器 (8765)
-        |-- 静态文件托管（生产）
-        |-- MCP Streamable HTTP /mcp/
-        |-- Agent provider 代理 /api/agent/*
+        |-- routes/system.ts：静态文件、SPA 与版本检查
+        |-- routes/mcp.ts：MCP Streamable HTTP /mcp/
+        |-- routes/agent.ts：内置记忆管家 /api/agent/*
+        |-- routes/{memories,data,settings,integrations}.ts
         `-- MemoryStore
               `-- better-sqlite3 + SQLite FTS5 (data/memory.db)
 ```
@@ -27,19 +28,23 @@ Fastify 应用服务器 (8765)
 
 ### 3.1 MemoryStore
 
-负责建表、CRUD、全文检索、召回统计、MCP Key、Agent 配置、对话持久化和 MCP 调用统计。SQLite 开启 WAL 与 5 秒 busy timeout。删除是软删除（写入 `deleted_at`），普通查询排除已删除行。
+负责建表、schema v2 迁移、CRUD、内容完整性、全文检索、召回事件、导出导入、MCP Key、Agent 配置、对话持久化和 MCP 调用统计。SQLite 开启 WAL 与 5 秒 busy timeout。删除是软删除（写入 `deleted_at`），普通查询排除已删除行。
 
 搜索优先使用 FTS5 `memories_fts`（字段 `content/kind/scope/project/source`），用触发器同步 INSERT/UPDATE/DELETE；非法 FTS 查询回退内容子串匹配。结果按 BM25 排序，读取、搜索、上下文召回增加 `recall_count` 并更新 `last_recalled_at`。
+
+写入先做 NFKC、空白折叠和小写归一化后计算 SHA256；完全重复返回已有记录。字符 bigram Jaccard 相似度达到 0.62 时返回相似候选，但不自动覆盖。只有显式提供 `supersedes_id` 才创建替代关系，被替代记忆不进入固定上下文。
 
 ### 3.2 MCP 层
 
 使用 MCP SDK 的 `McpServer` 与 `StreamableHTTPServerTransport`，端点 `/mcp/`。内置 Agent 使用 `x-memory-one-internal`；外部默认要求 `Authorization: Bearer <key>`，可在 MCP 设置关闭。
 
+`memory-get-context` 只返回仍在使用的记忆，先当前项目后全局，按 importance × confidence、pinned、最近召回和时间加权排序，并以约 2400 token 为预算截断。MCP 层按客户端身份、scope、limit 建立上下文缓存；缓存版本只由记忆写入版本控制，因此召回观察不会导致缓存失效。所有调用统计和 `context/search/get/list` 召回事件都会写入 SQLite。
+
 | 工具 | 输入 | 行为 |
 | --- | --- | --- |
-| `memory-get-context` | `scope?`, `limit` 默认 10 | 返回 `metadata.always_include=true` 的固定上下文；传入项目 scope 时优先返回项目固定记忆，再返回全局固定记忆；省略 scope 仅返回全局固定记忆；每项新任务开始调用一次 |
+| `memory-get-context` | `scope?`, `limit` 默认 10 | 返回 token 预算内的 `metadata.always_include=true` 固定上下文；传入项目 scope 时优先返回项目固定记忆，再返回全局固定记忆；省略 scope 仅返回全局固定记忆；当前任务已有结果时不得重复调用 |
 | `memory-search` | `query`, `scope?`, `limit` 默认 20 | 按需使用 FTS 搜索具体历史记忆并记录召回 |
-| `memory_store` | `content`, `kind?`, `scope?`, `confidence?`, `importance?`, `metadata?` 等 | 创建，默认 kind=`fact`、confidence=1、importance=.5 |
+| `memory_store` | `content`, `kind?`, `scope?`, `confidence?`, `importance?`, `metadata?`, `supersedes_id?` | 创建；默认 kind=`fact`、confidence=1、importance=.5；完全重复返回已有记录并标记 duplicate |
 | `memory_get` | `memory_id` | 返回单项；不存在返回 `memory_not_found` |
 | `memory_list` | `scope?`, `limit` 默认 50 | 按发生/创建时间倒序 |
 | `memory_update` | `memory_id`, `patch` | 局部更新，必要时先读取 |
@@ -56,7 +61,11 @@ Fastify 应用服务器 (8765)
 
 ### memories
 
-`id TEXT PK`、`content TEXT NOT NULL`、`kind TEXT`、`scope TEXT`、`project TEXT NULL`、`session_id TEXT NULL`、`source TEXT NULL`、`occurred_at TEXT NULL`、`confidence REAL`、`importance REAL`、`metadata_json TEXT`、`embedding BLOB NULL`、`created_at`、`updated_at`、`deleted_at NULL`、`recall_count INTEGER`、`last_recalled_at NULL`。索引覆盖 scope/project、session、occurred_at；embedding 目前预留，检索使用 FTS。
+`id TEXT PK`、`content TEXT NOT NULL`、`kind TEXT`、`scope TEXT`、`project TEXT NULL`、`session_id TEXT NULL`、`source TEXT NULL`、`occurred_at TEXT NULL`、`confidence REAL`、`importance REAL`、`metadata_json TEXT`、`embedding BLOB NULL`、`created_at`、`updated_at`、`deleted_at NULL`、`recall_count INTEGER`、`last_recalled_at NULL`、`content_hash TEXT NULL`、`supersedes_id TEXT NULL`、`superseded_by TEXT NULL`。索引覆盖 scope/project、session、occurred_at、content_hash 和替代关系；embedding 目前预留，检索使用 FTS。
+
+### memory_recall_events
+
+自增 id、memory_id、source（`context/search/get/list`）、query、created_at，用于单项和全局召回诊断。
 
 ### mcp_tool_calls
 
@@ -78,6 +87,10 @@ id、name、prefix、key_hash（唯一）、allowed_tools JSON、is_default、cr
 | GET | `/api/search?query=&scope=&project=&limit=` | 搜索并增加召回 |
 | GET | `/api/memories/most-recalled` | 召回排行 |
 | GET/POST/PATCH/DELETE | `/api/memories[/:id]` | CRUD；POST 缺 content 返回 422 |
+| GET | `/api/memories/:id/recalls` | 单项最近召回事件 |
+| GET | `/api/diagnostics/recalls` | 全局最近召回诊断 |
+| GET | `/api/data/export` | 安全 JSON 导出 |
+| POST | `/api/data/import` | merge/replace 导入 |
 | GET | `/api/mcp/stats` | 调用统计 |
 | GET/PUT | `/api/mcp/config` | Bearer 开关 |
 | GET/POST/DELETE | `/api/mcp/keys[/:id]` | Key 列表、创建、撤销 |
@@ -94,7 +107,7 @@ id、name、prefix、key_hash（唯一）、allowed_tools JSON、is_default、cr
 
 导航：全部记忆、时间线、归档、偏好与习惯、Scope 分类、标签、MCP 服务、设置。工具栏提供搜索、scope 选择、新建记忆、主题切换。卡片显示类型、时间、正文、scope、置信度、召回次数；点击打开详情，可编辑或软删除。
 
-MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 区域显示路径、状态、启用/更新按钮。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。Agent 配置模式只显示配置表单并自动保存，不显示对话输入框；顶部模式按钮提供明确的“返回对话”操作。
+MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 区域显示状态、启用/更新按钮，并保留紧凑的 Codex eyebrow。设置页新增数据备份：导出 JSON、合并导入和需要确认的替换导入。记忆详情显示最近召回来源、查询和时间。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。Agent 配置模式只显示配置表单并自动保存，不显示对话输入框；顶部模式按钮提供明确的“返回对话”操作。
 
 Composer 模态用于新建/编辑：正文为主输入，kind、scope、source、confidence、importance、occurred_at、metadata 为辅助字段。保存后刷新并选中新项。按钮用 lucide 图标并提供 tooltip，搜索支持 Cmd/Ctrl+K。
 

@@ -44,6 +44,10 @@ Memory One primarily exists so agents retrieve and apply relevant prior experien
 
 Codex global guidance must only be installed through an explicit user action in the frontend. That action may replace the instruction block managed by Memory One, but it must preserve all unrelated content in the user's global `AGENTS.md`.
 
+## MCP Discussion Scope
+
+Unless the user explicitly identifies the built-in memory manager Agent, discussions about MCP calls, context deduplication, or client behavior refer to external Agents consuming Memory One through MCP.
+
 ## Durable Corrections
 
 When the user corrects agent behavior or states a durable repository-specific working preference, update this `AGENTS.md` in the same change so future work follows that correction.

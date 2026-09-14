@@ -8,10 +8,7 @@
   },
   "files": [
     "bin",
-    "dist/server.js",
-    "dist/server.js.map",
-    "dist/storage.js",
-    "dist/storage.js.map",
+    "dist",
     "public",
     "README.md"
   ],
@@ -39,7 +36,8 @@
     "test": "tsx --test src/*.test.ts",
     "v": "node scripts/bump-version.mjs",
     "prepublishOnly": "npm test && npm run build",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.web.json --noEmit"
   },
   "dependencies": {
     "@fastify/static": "^8.3.0",
