@@ -98,6 +98,12 @@ id、name、prefix、key_hash（唯一）、allowed_tools JSON、is_default、cr
 | POST | `/api/agent/stream` | Agent SSE 对话 |
 | GET | `/api/integrations/codex` | 检查 Codex 指令状态 |
 | POST | `/api/integrations/codex/install` | 写入 Codex 指令 |
+| GET | `/api/integrations/codex/mcp` | 检查 Codex MCP 配置 |
+| POST | `/api/integrations/codex/mcp/install` | 写入 Codex MCP 配置 |
+| GET | `/api/integrations/claude` | 检查 Claude Code 全局增强状态 |
+| POST | `/api/integrations/claude/install` | 写入 Claude Code 全局增强 |
+| GET | `/api/integrations/claude/mcp` | 检查 Claude Code MCP 配置 |
+| POST | `/api/integrations/claude/mcp/install` | 写入 Claude Code MCP 配置 |
 
 错误使用 `{detail: string}`；前端将配置缺失、供应商失败、加载失败映射为中文提示。
 
@@ -107,7 +113,7 @@ id、name、prefix、key_hash（唯一）、allowed_tools JSON、is_default、cr
 
 导航：全部记忆、时间线、归档、偏好与习惯、Scope 分类、标签、MCP 服务、设置。工具栏提供搜索、scope 选择、新建记忆、主题切换。卡片显示类型、时间、正文、scope、置信度、召回次数；点击打开详情，可编辑或软删除。
 
-MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 区域显示状态、启用/更新按钮，并保留紧凑的 Codex eyebrow。设置页新增数据备份：导出 JSON、合并导入和需要确认的替换导入。记忆详情显示最近召回来源、查询和时间。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。Agent 配置模式只显示配置表单并自动保存，不显示对话输入框；顶部模式按钮提供明确的“返回对话”操作。
+MCP 页面有“配置/调用统计”标签：endpoint、JSON 配置、工具清单、Bearer 开关、Key 管理、复制反馈；Codex 和 Claude Code 区域显示 MCP 连接与任务前置记忆状态、启用/更新按钮，并保留紧凑的客户端 eyebrow。设置页新增数据备份：导出 JSON、合并导入和需要确认的替换导入。记忆详情显示最近召回来源、查询和时间。右下角 Agent 按钮打开记忆管家；首次进入配置 Tab，填写 Base URL、协议、模型、Key 后进入对话 Tab。Agent 配置模式只显示配置表单并自动保存，不显示对话输入框；顶部模式按钮提供明确的“返回对话”操作。
 
 Composer 模态用于新建/编辑：正文为主输入，kind、scope、source、confidence、importance、occurred_at、metadata 为辅助字段。保存后刷新并选中新项。按钮用 lucide 图标并提供 tooltip，搜索支持 Cmd/Ctrl+K。
 
@@ -124,15 +130,15 @@ Composer 模态用于新建/编辑：正文为主输入，kind、scope、source�
 
 ### 首次使用
 
-启动 -> 打开工作台 -> 新建记忆 -> 搜索/查看详情 -> MCP 页面创建按工具授权的 Key -> 复制 JSON 到客户端 -> 可选启用 Codex 全局指令 -> 重启客户端或新会话。
+启动 -> 打开工作台 -> 新建记忆 -> 搜索/查看详情 -> MCP 页面创建按工具授权的 Key -> 复制 JSON 到客户端 -> 可选启用 Codex 或 Claude Code 全局指令 -> 重启客户端或新会话。
 
 ### Agent 一轮
 
 新任务首次提交消息 -> 校验配置 -> 自动 `memory-get-context`；同一任务后续提交消息跳过固定上下文读取 -> 注入 provider 请求 -> provider 可能发起 `memory-search` 等 MCP 调用 -> 执行并回传 -> SSE 展示文本/工具状态 -> 保存消息 -> 发生写入/删除时刷新工作台。
 
-### Codex 集成
+### Codex / Claude Code 集成
 
-读取 `~/.codex/AGENTS.md` -> 只替换 `memory-one:codex` 标记区块 -> 保留其他内容 -> 写入“新任务开始前调用 memory-get-context，后续按需使用 memory-search”。只能由用户在页面点击触发。
+读取对应客户端的全局指令文件 -> 只替换 `memory-one:codex` 或 `memory-one:claude` 标记区块 -> 保留其他内容 -> 写入“新任务开始前调用 memory-get-context，后续按需使用 memory-search”。MCP 配置也只替换 `memory-one` 条目。所有写入只能由用户在页面点击触发。
 
 ## 9. 复刻验收清单
 
@@ -140,7 +146,7 @@ Composer 模态用于新建/编辑：正文为主输入，kind、scope、source�
 - 八个 MCP 工具的 schema、软删除、scope、召回和 feedback 行为一致。
 - FTS 搜索、空结果、非法查询回退、上限与错误码可用。
 - 三栏/响应式抽屉、Composer、详情编辑、主题、Key、统计和 Agent SSE 可操作。
-- Bearer Key 可创建、复制、撤销；未授权请求拒绝；Codex 标记更新不破坏其他 AGENTS 内容。
+- Bearer Key 可创建、复制、撤销；未授权请求拒绝；Codex 与 Claude Code 标记更新不破坏其他全局指令内容。
 - SQLite 重启后数据、Agent 历史和配置仍存在。
 
 ## 10. 运行参数

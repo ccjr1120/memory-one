@@ -63,6 +63,20 @@ export type CodexIntegration = {
   status: "not_configured" | "configured" | "update_available";
 };
 
+export type ClaudeIntegration = {
+  path: string;
+  status: "not_configured" | "configured" | "update_available";
+};
+
+export type ClaudeMcpIntegration = {
+  path: string;
+  detected: boolean;
+  endpoint: string | null;
+  auth_required: boolean;
+  configured_key_id: string | null;
+  status: "not_configured" | "configured" | "update_available";
+};
+
 export type CodexMcpIntegration = {
   path: string;
   detected: boolean;

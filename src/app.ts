@@ -4,6 +4,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { MemoryStore } from "./storage.js";
 import { ContextCache } from "./mcp/context-cache.js";
+import { createClaudeIntegrationService } from "./integrations/claude.js";
 import { createCodexIntegrationService } from "./integrations/codex.js";
 import { registerMemoryRoutes } from "./routes/memories.js";
 import { registerDataRoutes } from "./routes/data.js";
@@ -25,12 +26,13 @@ export function createApp(options: { dbPath?: string } = {}) {
     return { client, transport };
   };
   const codex = createCodexIntegrationService(store);
+  const claude = createClaudeIntegrationService(store);
 
   registerSystemRoutes(app, packageVersion);
   registerMemoryRoutes(app, store);
   registerDataRoutes(app, store);
   registerSettingsRoutes(app, store);
-  registerIntegrationRoutes(app, codex);
+  registerIntegrationRoutes(app, codex, claude);
   registerAgentRoutes(app, store, connectMemoryMcp as any);
   registerMcpRoutes(app, store, internalMcpToken, contextCache);
   return { app, store };

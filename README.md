@@ -47,12 +47,13 @@ memoryone open
 1. 在左侧进入 **MCP 服务** 页面。
 2. 默认开启 Bearer Key 认证。保持认证时，先在 **MCP Key 管理** 中创建 Key，并选择该 Agent 可以使用的工具。
 3. 使用 Codex 时，在 **Codex → 连接与增强** 中选择 Key 并配置连接，然后在同一卡片中启用 **Codex 增强**。
-4. 使用其他 Agent 时，复制页面中的 MCP 服务地址，并按客户端要求填写 Key。
-5. 重启 Agent 或开启新会话。
+4. 使用 Claude Code 时，在 **Claude → 连接与增强** 中选择 Key 并配置连接，然后在同一卡片中启用 **Claude 增强**。
+5. 使用其他 Agent 时，复制页面中的 MCP 服务地址，并按客户端要求填写 Key。
+6. 重启 Agent 或开启新会话。
 
-Memory One 会检测 `~/.codex/config.toml` 中现有的 `memory-one` MCP 配置。单击配置后，只会替换该 MCP 服务的配置，并保留 Codex 的其他设置。
+Memory One 会检测 Codex 的 `~/.codex/config.toml` 和 Claude Code 的 `~/.claude.json` 中现有的 `memory-one` MCP 配置。单击配置后，只会替换对应的 Memory One MCP 配置，并保留其他设置。
 
-关闭 Bearer Key 认证后，整个 MCP 服务都不再要求 Key。Codex 自动配置也会移除 Authorization Header，此时无需创建或选择 Key。
+关闭 Bearer Key 认证后，整个 MCP 服务都不再要求 Key。Codex 和 Claude Code 自动配置都会移除 Authorization Header，此时无需创建或选择 Key。
 
 Memory One 默认要求客户端通过 Bearer Key 访问 MCP 服务。复制的配置格式如下：
 
@@ -74,15 +75,15 @@ Memory One 默认要求客户端通过 Bearer Key 访问 MCP 服务。复制的�
 
 Memory One 默认仅监听本机；如需从其他设备访问，还需要自行配置网络访问方式。
 
-Codex 增强用于告诉 Codex 主动使用 Memory One，而不只是连接 MCP。在 Codex 卡片中单击 **启用全局记忆**；已有旧版指令时，单击 **更新全局指令**。
+Codex 增强和 Claude 增强用于告诉客户端主动使用 Memory One，而不只是连接 MCP。在对应客户端卡片中单击 **启用全局记忆**；已有旧版指令时，单击 **更新全局指令**。
 
-启用后，Codex 会被要求：
+启用后，Codex 和 Claude Code 会被要求：
 
 - 每项新任务开始前调用一次 `memory-get-context`；如果当前任务对话中已有其结果，不要重复调用，后续按需使用 `memory-search`。
 - 在 Git 项目中使用仓库根目录的绝对路径作为 `scope`。
 - 将用户表达的长期偏好、决定、纠正和项目约定及时写入或更新到 Memory One。
 
-Memory One 只会替换 `~/.codex/AGENTS.md` 中由自己管理的 `memory-one:codex` 标记区块，不会覆盖其他内容。该操作只会在你主动单击按钮后执行。
+Memory One 只会替换 `~/.codex/AGENTS.md` 中由自己管理的 `memory-one:codex` 标记区块，或 `~/.claude/CLAUDE.md` 中由自己管理的 `memory-one:claude` 标记区块，不会覆盖其他内容。该操作只会在你主动单击按钮后执行。
 
 ## 3. 开始使用
 
@@ -111,9 +112,9 @@ Memory One 只会替换 `~/.codex/AGENTS.md` 中由自己管理的 `memory-one:c
 
 ![记忆总览](./docs/screenshots/memory-overview.png)
 
-MCP 服务与 Codex 配置：
+MCP 服务与 Codex、Claude Code 配置：
 
-![MCP 服务与 Codex 配置](./docs/screenshots/mcp-codex.png)
+![MCP 服务与 Codex、Claude Code 配置](./docs/screenshots/mcp-codex.png)
 
 ## 使用内置记忆管家
 
@@ -225,7 +226,7 @@ npm uninstall --global @ccjr1120/memory-one
 
 1. Agent 已配置 Memory One MCP 地址。
 2. 如果开启了 Bearer Key 认证，确认客户端已填写有效 Key，且 Key 已授权 `memory-get-context`。
-3. 使用 Codex 时，确认已在 Codex 卡片中启用 **全局任务前置记忆**。
+3. 使用 Codex 或 Claude Code 时，确认已在对应卡片中启用 **全局任务前置记忆**。
 4. 启用后已经重启 Agent 或开启新会话。
 
 ### 记忆管家提示配置不完整

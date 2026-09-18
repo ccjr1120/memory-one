@@ -14,6 +14,8 @@ import {
 import { ui } from "../lib/copy.js";
 import { formatDate } from "../lib/format.js";
 import type {
+  ClaudeIntegration,
+  ClaudeMcpIntegration,
   CodexIntegration,
   CodexMcpIntegration,
   Language,
@@ -55,8 +57,12 @@ const mcpCopy = {
     copied: "已复制到剪贴板",
     copyFailed: "复制失败，请手动复制",
     codexWritten: "Codex MCP 配置已写入。重新启动 Codex 或开启新会话后生效。",
+    claudeWritten: "Claude MCP 配置已写入。重新启动 Claude Code 或开启新会话后生效。",
     codexWriteFailed: "配置失败，请检查 Codex 配置目录。",
+    claudeWriteFailed: "配置失败，请检查 Claude Code 配置目录。",
     codexGuidanceWritten: "全局指令已写入。重新启动 Codex 或开启新会话后生效。",
+    claudeGuidanceWritten: "Claude Code 全局增强已写入。重新启动 Claude Code 或开启新会话后生效。",
+    claudeGuidanceWriteFailed: "写入失败，请检查 Claude Code 配置目录的访问权限。",
     writeFailed: "写入失败，请检查 Codex 配置目录的访问权限。",
     keyCreateFailed: "Key 创建失败，请稍后重试。",
     keyDeleteConfirm: (name: string) => `确定删除 Key“${name}”吗？删除后将立即失效，且无法恢复。`,
@@ -117,7 +123,11 @@ const mcpCopy = {
     copyFailed: "Copy failed. Copy it manually.",
     codexWritten: "Codex MCP configuration saved. Restart Codex or start a new session to apply it.",
     codexWriteFailed: "Could not save the configuration. Check the Codex configuration directory.",
+    claudeWritten: "Claude MCP configuration saved. Restart Claude Code or start a new session to apply it.",
+    claudeWriteFailed: "Could not save the configuration. Check the Claude Code configuration directory.",
     codexGuidanceWritten: "Global guidance saved. Restart Codex or start a new session to apply it.",
+    claudeGuidanceWritten: "Claude Code global enhancement saved. Restart Claude Code or start a new session to apply it.",
+    claudeGuidanceWriteFailed: "Could not save global guidance. Check the Claude Code configuration directory.",
     writeFailed: "Could not save global guidance. Check the Codex configuration directory.",
     keyCreateFailed: "Could not create the key. Try again.",
     keyDeleteConfirm: (name: string) => `Delete key “${name}”? It will stop working immediately.`,
@@ -189,6 +199,13 @@ export default function McpPage({ language }: { language: Language }) {
   const [codexMcpKeyId, setCodexMcpKeyId] = useState("");
   const [codexMcpInstalling, setCodexMcpInstalling] = useState(false);
   const [codexMcpMessage, setCodexMcpMessage] = useState("");
+  const [claudeIntegration, setClaudeIntegration] = useState<ClaudeIntegration | null>(null);
+  const [claudeInstalling, setClaudeInstalling] = useState(false);
+  const [claudeMessage, setClaudeMessage] = useState("");
+  const [claudeMcpIntegration, setClaudeMcpIntegration] = useState<ClaudeMcpIntegration | null>(null);
+  const [claudeMcpKeyId, setClaudeMcpKeyId] = useState("");
+  const [claudeMcpInstalling, setClaudeMcpInstalling] = useState(false);
+  const [claudeMcpMessage, setClaudeMcpMessage] = useState("");
   const [mcpKeys, setMcpKeys] = useState<McpKey[]>([]);
   const [keyName, setKeyName] = useState("");
   const [keyTools, setKeyTools] = useState<string[]>(mcpTools.map(([name]) => name));
@@ -224,6 +241,12 @@ export default function McpPage({ language }: { language: Language }) {
     fetch(`/api/integrations/codex/mcp?endpoint=${encodeURIComponent(endpoint)}`)
       .then((response) => response.json())
       .then(setCodexMcpIntegration);
+    fetch("/api/integrations/claude")
+      .then((response) => response.json())
+      .then(setClaudeIntegration);
+    fetch(`/api/integrations/claude/mcp?endpoint=${encodeURIComponent(endpoint)}`)
+      .then((response) => response.json())
+      .then(setClaudeMcpIntegration);
     fetch("/api/mcp/keys")
       .then((response) => response.json())
       .then(setMcpKeys);
@@ -233,11 +256,20 @@ export default function McpPage({ language }: { language: Language }) {
     if (codexMcpIntegration?.configured_key_id) setCodexMcpKeyId(codexMcpIntegration.configured_key_id);
     else if (!availableKeys.some((key) => key.id === codexMcpKeyId)) setCodexMcpKeyId(availableKeys[0]?.id ?? "");
   }, [codexMcpIntegration, codexMcpKeyId, mcpKeys]);
+  useEffect(() => {
+    const availableKeys = mcpKeys.filter((key) => key.secret);
+    if (claudeMcpIntegration?.configured_key_id) setClaudeMcpKeyId(claudeMcpIntegration.configured_key_id);
+    else if (!availableKeys.some((key) => key.id === claudeMcpKeyId)) setClaudeMcpKeyId(availableKeys[0]?.id ?? "");
+  }, [claudeMcpIntegration, claudeMcpKeyId, mcpKeys]);
   const updateBearerKey = async (enabled: boolean) => {
     setUseBearerKey(enabled);
     await fetch("/api/mcp/config", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ use_bearer_key: enabled }) });
-    const response = await fetch(`/api/integrations/codex/mcp?endpoint=${encodeURIComponent(endpoint)}`);
-    setCodexMcpIntegration(await response.json());
+    const [codexResponse, claudeResponse] = await Promise.all([
+      fetch(`/api/integrations/codex/mcp?endpoint=${encodeURIComponent(endpoint)}`),
+      fetch(`/api/integrations/claude/mcp?endpoint=${encodeURIComponent(endpoint)}`),
+    ]);
+    setCodexMcpIntegration(await codexResponse.json());
+    setClaudeMcpIntegration(await claudeResponse.json());
   };
   const copyText = async (value: string, key: string) => {
     try {
@@ -286,6 +318,38 @@ export default function McpPage({ language }: { language: Language }) {
       setCodexMcpInstalling(false);
     }
   };
+  const installClaude = async () => {
+    setClaudeInstalling(true);
+    setClaudeMessage("");
+    try {
+      const response = await fetch("/api/integrations/claude/install", { method: "POST" });
+      if (!response.ok) throw new Error("install_failed");
+      setClaudeIntegration(await response.json());
+      setClaudeMessage(m.claudeGuidanceWritten);
+    } catch {
+      setClaudeMessage(m.claudeGuidanceWriteFailed);
+    } finally {
+      setClaudeInstalling(false);
+    }
+  };
+  const installClaudeMcp = async () => {
+    setClaudeMcpInstalling(true);
+    setClaudeMcpMessage("");
+    try {
+      const response = await fetch("/api/integrations/claude/mcp/install", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ endpoint, ...(useBearerKey === true ? { key_id: claudeMcpKeyId } : {}) }),
+      });
+      if (!response.ok) throw new Error("install_failed");
+      setClaudeMcpIntegration(await response.json());
+      setClaudeMcpMessage(m.claudeWritten);
+    } catch {
+      setClaudeMcpMessage(m.claudeWriteFailed);
+    } finally {
+      setClaudeMcpInstalling(false);
+    }
+  };
   const createMcpKey = async () => {
     setKeyBusy(true);
     setKeyMessage("");
@@ -332,6 +396,23 @@ export default function McpPage({ language }: { language: Language }) {
     codexMcpIntegration?.status === "configured"
       ? m.configured
       : codexMcpIntegration?.status === "update_available"
+        ? m.needUpdate
+        : m.notConfigured;
+  const claudeStatus =
+    claudeIntegration?.status === "configured"
+      ? m.configured
+      : claudeIntegration?.status === "update_available"
+        ? m.needUpdate
+        : m.notConfigured;
+  const claudeButton =
+    claudeIntegration?.status === "update_available"
+      ? m.update
+      : m.enabled;
+  const claudeMcpConfigured = claudeMcpIntegration?.status === "configured" && (useBearerKey !== true || claudeMcpIntegration.configured_key_id === claudeMcpKeyId);
+  const claudeMcpStatus =
+    claudeMcpIntegration?.status === "configured"
+      ? m.configured
+      : claudeMcpIntegration?.status === "update_available"
         ? m.needUpdate
         : m.notConfigured;
   return (
@@ -388,6 +469,33 @@ export default function McpPage({ language }: { language: Language }) {
                 {codexMessage ? <div className="integration-message" role="status">{codexMessage}</div> : null}
               </div>
               <button className="primary-button" disabled={!codexIntegration || codexInstalling || codexIntegration.status === "configured"} onClick={installCodex}>{codexInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{codexIntegration?.status === "configured" ? m.enabled : codexButton}</button>
+            </section>
+          </div>
+        </section>
+        <section className="mcp-panel codex-mcp-panel client-mcp-panel">
+          <span className="eyebrow codex-compact-heading">Claude Code</span>
+          <div className="codex-compact-list">
+            <section className="codex-compact-row">
+              <div className="codex-compact-copy">
+                <div className="codex-compact-title"><strong>{m.codexConnection}</strong><span className={`integration-status status-${claudeMcpIntegration?.status ?? "loading"}`}>{claudeMcpIntegration ? claudeMcpStatus : m.detecting}</span></div>
+                <p>{useBearerKey === true ? m.chooseKey : useBearerKey === false ? m.autoConnection : m.readingAuth}</p>
+                {claudeMcpMessage ? <div className="integration-message" role="status">{claudeMcpMessage}</div> : null}
+              </div>
+              <div className="codex-compact-actions">
+                {useBearerKey === true ? <select aria-label={m.bearer} value={claudeMcpKeyId} onChange={(event) => setClaudeMcpKeyId(event.target.value)} disabled={!mcpKeys.some((key) => key.secret)}>
+                {mcpKeys.filter((key) => key.secret).map((key) => <option key={key.id} value={key.id}>{key.name} · {key.prefix}••••</option>)}
+                {!mcpKeys.some((key) => key.secret) ? <option value="">{m.createFirst}</option> : null}
+                </select> : null}
+                <button className="primary-button" disabled={useBearerKey === null || !claudeMcpIntegration || (useBearerKey === true && !claudeMcpKeyId) || claudeMcpInstalling || claudeMcpConfigured} onClick={() => void installClaudeMcp()}>{claudeMcpInstalling ? <LoaderCircle className="spin" size={16} /> : <Server size={16} />}{claudeMcpConfigured ? m.configured : claudeMcpIntegration?.status === "not_configured" ? m.configure : m.update}</button>
+              </div>
+            </section>
+            <section className="codex-compact-row">
+              <div className="codex-compact-copy">
+                <div className="codex-compact-title"><strong>{m.taskMemory}</strong><span className={`integration-status status-${claudeIntegration?.status ?? "loading"}`}>{claudeIntegration ? claudeStatus : m.reading}</span></div>
+                <p>{m.taskMemoryDesc}</p>
+                {claudeMessage ? <div className="integration-message" role="status">{claudeMessage}</div> : null}
+              </div>
+              <button className="primary-button" disabled={!claudeIntegration || claudeInstalling || claudeIntegration.status === "configured"} onClick={installClaude}>{claudeInstalling ? <LoaderCircle className="spin" size={16} /> : <FileCog size={16} />}{claudeIntegration?.status === "configured" ? m.enabled : claudeButton}</button>
             </section>
           </div>
         </section>
